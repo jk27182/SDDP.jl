@@ -43,9 +43,9 @@ mutable struct ConvexApproximation
             states,
             objective_states,
             belief_states,
-            Cut[],
+            Cut[], 
             SampledState[],
-            Cut[],
+            Cut[], #cuts to be deleted
             deletion_minimum,
         )
     end
@@ -83,27 +83,36 @@ function _dynamic_range_warning(intercept, coefficients)
     return
 end
 
-function _add_cut(
-    V::ConvexApproximation,
-    θᵏ::Float64,
-    πᵏ::Dict{Symbol,Float64},
-    xᵏ::Dict{Symbol,Float64},
-    obj_y::Union{Nothing,NTuple{N,Float64}},
-    belief_y::Union{Nothing,Dict{T,Float64}};
-    cut_selection::Bool = true,
-) where {N,T}
-    for (key, x) in xᵏ
-        θᵏ -= πᵏ[key] * x
-    end
-    _dynamic_range_warning(θᵏ, πᵏ)
-    cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
-    _add_cut_constraint_to_model(V, cut)
-    if cut_selection
-        _cut_selection_update(V, cut, xᵏ)
-    end
-    return
-end
+CUT_BUFFER = Cut[]
 
+# function _add_cut(
+#     V::ConvexApproximation,
+#     θᵏ::Float64,
+#     πᵏ::Dict{Symbol,Float64},
+#     xᵏ::Dict{Symbol,Float64},
+#     obj_y::Union{Nothing,NTuple{N,Float64}},
+#     belief_y::Union{Nothing,Dict{T,Float64}};
+#     cut_selection::Bool = true,
+# ) where {N,T}
+#     for (key, x) in xᵏ
+#         θᵏ -= πᵏ[key] * x
+#     end
+#     # println("es wird richtig dick ein cut geadded")
+#     _dynamic_range_warning(θᵏ, πᵏ)
+#     cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
+#
+#     _add_cut_constraint_to_model(V, cut)
+#
+#     push!(cut_buffer, cut)
+#     if cut_selection
+#         _cut_selection_update(V, cut, xᵏ)
+#     end
+#
+#     return
+# end
+
+
+# Mark
 function _add_cut_constraint_to_model(V::ConvexApproximation, cut::Cut)
     model = JuMP.owner_model(V.theta)
     yᵀμ = JuMP.AffExpr(0.0)
@@ -117,14 +126,18 @@ function _add_cut_constraint_to_model(V::ConvexApproximation, cut::Cut)
             JuMP.add_to_expression!(yᵀμ, cut.belief_y[k], μ)
         end
     end
-    expr = @expression(
-        model,
-        V.theta + yᵀμ - sum(cut.coefficients[i] * x for (i, x) in V.states)
-    )
-    cut.constraint_ref = if JuMP.objective_sense(model) == MOI.MIN_SENSE
-        @constraint(model, expr >= cut.intercept)
-    else
-        @constraint(model, expr <= cut.intercept)
+
+    println("Hinzufügen von Cut in das Problem nur diesmla doch nicht")
+    if false 
+        expr = @expression(
+            model,
+            V.theta + yᵀμ - sum(cut.coefficients[i] * x for (i, x) in V.states)
+        )
+        cut.constraint_ref = if JuMP.objective_sense(model) == MOI.MIN_SENSE
+            @constraint(model, expr >= cut.intercept)
+        else
+            @constraint(model, expr <= cut.intercept)
+        end
     end
     return
 end
@@ -147,15 +160,24 @@ function _dominates(candidate, incumbent, minimization::Bool)
     return minimization ? candidate >= incumbent : candidate <= incumbent
 end
 
+# In V sind alle bisherigen Cuts abgepseichert und dann wird das ganze erweitert
+# mit dem neuen Cut 'cut' und dem momentanen State 'state'
 function _cut_selection_update(
     V::ConvexApproximation,
     cut::Cut,
     state::Dict{Symbol,Float64},
 )
+    # println("hier laeuft die cut selection")
     model = JuMP.owner_model(V.theta)
     is_minimization = JuMP.objective_sense(model) == MOI.MIN_SENSE
+    # Ein sampled State entspricht dem x mit dem dann ein Cut generiert wird
+    # println("der belief ist $(cut.belief_y)")
+    # belief state war in Newsvendor nothin, macht auch Sinn da der Belief State etwas mit partially observable States zu tun hat
+    # In Newsvendor ist der State fully observable
     sampled_state = SampledState(state, cut.obj_y, cut.belief_y, cut, NaN)
     sampled_state.best_objective = _eval_height(cut, sampled_state)
+    # println("Die bisherige Approximation ist $(V)")
+    # println("Der SampledState ist $(sampled_state)")
     # Loop through previously sampled states and compare the height of the most
     # recent cut against the current best. If this new cut is an improvement,
     # store this one instead.
@@ -482,7 +504,8 @@ function _add_average_cut(
         πᵏ,
         outgoing_state,
         obj_y,
-        belief_y,
+        belief_y;
+        cut_buffering = true,
     )
     return (
         theta = θᵏ,
@@ -514,7 +537,8 @@ function _add_multi_cut(
             outgoing_state,
             node.objective_state === nothing ? nothing :
             node.objective_state.state,
-            node.belief_state === nothing ? nothing : node.belief_state.belief,
+            node.belief_state === nothing ? nothing : node.belief_state.belief;
+            cut_buffering = true,
         )
     end
     model = JuMP.owner_model(bellman_function.global_theta.theta)
@@ -731,6 +755,7 @@ function read_cuts_from_file(
                 nothing,
                 nothing;
                 cut_selection = has_state,
+                cut_buffering = true,
             )
         end
         # Loop through and add the multi-cuts. There are two parts:
@@ -760,6 +785,7 @@ function read_cuts_from_file(
                 nothing,
                 nothing;
                 cut_selection = has_state,
+                cut_buffering = true,
             )
         end
         # Here is part (ii): adding the constraints that define the risk-set

@@ -376,6 +376,7 @@ function _uninitialize_solver(model::PolicyGraph; throw_error::Bool)
     return
 end
 
+# Marker
 # Internal function: solve the subproblem associated with node given the
 # incoming state variables state and realization of the stagewise-independent
 # noise term noise.
@@ -1145,6 +1146,7 @@ function train(
         end
     end
     close(log_file_handle)
+    # println(cut_buffer)
     return
 end
 

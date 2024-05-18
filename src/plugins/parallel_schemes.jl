@@ -144,6 +144,7 @@ function slave_update(model::PolicyGraph, result::IterationResult)
                     "mode. Use `parallel_scheme = Serial()` instead.",
                 )
             end
+            println("richtiges slave update")
             _add_cut(
                 model[node_index].bellman_function.global_theta,
                 cut.theta,
@@ -152,6 +153,7 @@ function slave_update(model::PolicyGraph, result::IterationResult)
                 cut.obj_y,
                 cut.belief_y;
                 cut_selection = true,
+                cut_buffering = true,
             )
         end
     end
