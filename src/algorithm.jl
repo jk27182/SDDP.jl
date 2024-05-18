@@ -814,6 +814,7 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
         forward_trajectory = forward_pass(model, options, options.forward_pass)
         options.forward_pass_callback(forward_trajectory)
     end
+    # Marker hier könnte ich meinen Code einfügen
     TimerOutputs.@timeit model.timer_output "backward_pass" begin
         cuts = backward_pass(
             model,
