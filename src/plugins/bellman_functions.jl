@@ -2,6 +2,12 @@
 #  This Source Code Form is subject to the terms of the Mozilla Public License,
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
+using JSON
+
+struct Cut_Min_Info
+    intercept::Float64
+    coefficients::Float64
+end
 
 mutable struct Cut
     intercept::Float64
@@ -83,7 +89,6 @@ function _dynamic_range_warning(intercept, coefficients)
     return
 end
 
-CUT_BUFFER = Cut[]
 
 # function _add_cut(
 #     V::ConvexApproximation,
@@ -127,17 +132,15 @@ function _add_cut_constraint_to_model(V::ConvexApproximation, cut::Cut)
         end
     end
 
-    println("Hinzufügen von Cut in das Problem nur diesmla doch nicht")
-    if false 
-        expr = @expression(
-            model,
-            V.theta + yᵀμ - sum(cut.coefficients[i] * x for (i, x) in V.states)
-        )
-        cut.constraint_ref = if JuMP.objective_sense(model) == MOI.MIN_SENSE
-            @constraint(model, expr >= cut.intercept)
-        else
-            @constraint(model, expr <= cut.intercept)
-        end
+    # println("Hinzufügen von Cut in das Problem nur diesmla doch nicht")
+    expr = @expression(
+        model,
+        V.theta + yᵀμ - sum(cut.coefficients[i] * x for (i, x) in V.states)
+    )
+    cut.constraint_ref = if JuMP.objective_sense(model) == MOI.MIN_SENSE
+        @constraint(model, expr >= cut.intercept)
+    else
+        @constraint(model, expr <= cut.intercept)
     end
     return
 end
@@ -160,13 +163,96 @@ function _dominates(candidate, incumbent, minimization::Bool)
     return minimization ? candidate >= incumbent : candidate <= incumbent
 end
 
+function calc_pareto_front(data::AbstractArray{<:Number})
+    # es muss noch ein Argument übergeben werden welches angibt in welcher Dimension die Daten gestackt sind
+    # sort data via first entry
+    data = data[:, sortperm(data[1,:], rev=true)]
+
+    calc_pareto_front = Tuple{Float64, Float64}[]
+    n_cols = size(data)[2]
+    point_x, point_y = data[:, 1][1], data[:, 1][2]
+    push!(calc_pareto_front, (point_x, point_y))
+    max_prev_y = point_y
+    for col in 2:n_cols
+        point_x, point_y = data[:, col]    
+        if point_y > max_prev_y
+            # If next entry has same first entry but higher second entry
+            # that entry dominates previous entries
+            if point_x == calc_pareto_front[end][1]
+                calc_pareto_front[end] = (point_x, point_y)
+            else
+                push!(calc_pareto_front, (point_x, point_y))
+            end
+            max_prev_y = point_y
+        end
+    end
+    return calc_pareto_front
+end
+
+
+
 # In V sind alle bisherigen Cuts abgepseichert und dann wird das ganze erweitert
 # mit dem neuen Cut 'cut' und dem momentanen State 'state'
 function _cut_selection_update(
     V::ConvexApproximation,
     cut::Cut,
     state::Dict{Symbol,Float64},
+    iteration::Int;
+    stage::Int,
 )
+    println("neue cut selection mit multiple dispatch")
+    SDDP.count_update += 1
+    # println("hier laeuft die cut selection")
+    model = JuMP.owner_model(V.theta)
+    is_minimization = JuMP.objective_sense(model) == MOI.MIN_SENSE
+    # Ein sampled State entspricht dem x mit dem dann ein Cut generiert wird
+    # println("der belief ist $(cut.belief_y)")
+    # belief state war in Newsvendor nothin, macht auch Sinn da der Belief State etwas mit partially observable States zu tun hat
+    # In Newsvendor ist der State fully observable
+    # sampled_state = SampledState(state, cut.obj_y, cut.belief_y, cut, NaN)
+    # sampled_state.best_objective = _eval_height(cut, sampled_state)
+    test_cut = SDDP.Cut(0, Dict(:x => 1), nothing, nothing, 1, nothing)
+
+    constr_ref_dict = Dict{Vector{Float64}, Union{JuMP.ConstraintRef, Nothing}}()
+    for cut_old in V.cuts
+        cut_key = [cut_old.intercept, cut_old.coefficients[:x]]
+        constr_ref_dict[cut_key] = cut_old.constraint_ref
+    end
+    # add new cut to data
+    constr_ref_dict[[cut.intercept, cut.coefficients[:x]]] = nothing
+
+    pareto_keys = calc_pareto_front(
+        reduce(hcat, keys(constr_ref_dict))
+    )
+    pareto_cuts = Cut[]
+    for (intercept, coefs) in pareto_keys
+        pareto_cut = Cut(
+            intercept,
+            Dict(:x => coefs),
+            nothing,
+            nothing,
+            1,
+            constr_ref_dict[collect((intercept, coefs))]
+        )
+        push!(pareto_cuts, pareto_cut)
+    end
+
+    # V.cuts wird zwar upgedated aber die Constraints werden nicht aus dem Modell geloescht
+    V.cuts = pareto_cuts
+    # open("data_dict.json", "w") do file
+    #     write(file, JSON.json(data))
+    # end
+    # push!(V.cuts, cut)
+
+end
+
+function _cut_selection_update(
+    V::ConvexApproximation,
+    cut::Cut,
+    state::Dict{Symbol,Float64};
+    stage::Int,
+)
+    SDDP.count_update += 1
     # println("hier laeuft die cut selection")
     model = JuMP.owner_model(V.theta)
     is_minimization = JuMP.objective_sense(model) == MOI.MIN_SENSE
@@ -218,6 +304,7 @@ function _cut_selection_update(
             _add_cut_constraint_to_model(V, old_cut)
         end
     end
+    push!(CUT_DICT[stage], cut)
     push!(V.cuts, cut)
     # Delete cuts that need to be deleted.
     for cut in V.cuts
@@ -432,6 +519,7 @@ function refine_bellman_function(
     nominal_probability::Vector{Float64},
     objective_realizations::Vector{Float64},
 ) where {T}
+    println("refining bellman function")
     # Sanity checks.
     @assert length(dual_variables) ==
             length(noise_supports) ==
@@ -447,6 +535,7 @@ function refine_bellman_function(
         objective_realizations,
         model.objective_sense == MOI.MIN_SENSE,
     )
+    # MARKER hier wird wirklich der Cut eingefügt
     # The meat of the function.
     if bellman_function.cut_type == SINGLE_CUT
         return _add_average_cut(
@@ -477,7 +566,7 @@ function _add_average_cut(
     risk_adjusted_probability::Vector{Float64},
     objective_realizations::Vector{Float64},
     dual_variables::Vector{Dict{Symbol,Float64}},
-    offset::Float64,
+    offset::Float64
 )
     N = length(risk_adjusted_probability)
     @assert N == length(objective_realizations) == length(dual_variables)
@@ -506,6 +595,7 @@ function _add_average_cut(
         obj_y,
         belief_y;
         cut_buffering = true,
+        stage=node.index,
     )
     return (
         theta = θᵏ,
@@ -539,6 +629,7 @@ function _add_multi_cut(
             node.objective_state.state,
             node.belief_state === nothing ? nothing : node.belief_state.belief;
             cut_buffering = true,
+            stage=node.index
         )
     end
     model = JuMP.owner_model(bellman_function.global_theta.theta)
@@ -756,6 +847,7 @@ function read_cuts_from_file(
                 nothing;
                 cut_selection = has_state,
                 cut_buffering = true,
+                stage=node.index,
             )
         end
         # Loop through and add the multi-cuts. There are two parts:
@@ -786,6 +878,7 @@ function read_cuts_from_file(
                 nothing;
                 cut_selection = has_state,
                 cut_buffering = true,
+                stage=node.index,
             )
         end
         # Here is part (ii): adding the constraints that define the risk-set
