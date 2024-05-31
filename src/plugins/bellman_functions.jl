@@ -16,7 +16,57 @@ mutable struct Cut
     belief_y::Union{Nothing,Dict{T,Float64} where {T}}
     non_dominated_count::Int
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
+    pareto_dominant::Bool
+
+    function Cut(
+        intercept::Float64,
+        coefficients::Dict{Symbol,Float64},
+        obj_y::Union{Nothing,NTuple{N,Float64} where {N}},
+        belief_y::Union{Nothing,Dict{T,Float64} where {T}},
+        non_dominated_count::Int,
+        constraint_ref::Union{Nothing,JuMP.ConstraintRef}
+    )
+        return new(
+            intercept,
+            coefficients,
+            obj_y,
+            belief_y,
+            non_dominated_count,
+            constraint_ref,
+            false
+        )
+    end
+
+    function Cut(
+        intercept::Float64,
+        coefficients::Dict{Symbol,Float64},
+        obj_y::Union{Nothing,NTuple{N,Float64} where {N}},
+        belief_y::Union{Nothing,Dict{T,Float64} where {T}},
+        non_dominated_count::Int,
+        constraint_ref::Union{Nothing,JuMP.ConstraintRef},
+        pareto_dominant::Bool
+    )
+        return new(
+            intercept,
+            coefficients,
+            obj_y,
+            belief_y,
+            non_dominated_count,
+            constraint_ref,
+            pareto_dominant,
+        )
+    end
 end
+
+# function ==(cut1::Cut, cut2::Cut)
+#     return (cut1.intercept == cut2.intercept 
+#     && cut1.coefficients == cut2.coefficients
+#     && cut1.obj_y == cut2.obj_y
+#     && cut1.belief_y == cut2.belief_y 
+#     && cut1.non_dominated_count == cut2.non_dominated_count 
+#     && cut1.constraint_ref == cut2.constraint_ref 
+#     )
+# end
 
 mutable struct SampledState
     state::Dict{Symbol,Float64}
@@ -163,10 +213,11 @@ function _dominates(candidate, incumbent, minimization::Bool)
     return minimization ? candidate >= incumbent : candidate <= incumbent
 end
 
-function calc_pareto_front(data::AbstractArray{<:Number})
+function calc_pareto_front(data::Array{Cut})
     # es muss noch ein Argument übergeben werden welches angibt in welcher Dimension die Daten gestackt sind
     # sort data via first entry
     data = data[:, sortperm(data[1,:], rev=true)]
+    # data = sort(data, by=c -> c.intercept)
 
     calc_pareto_front = Tuple{Float64, Float64}[]
     n_cols = size(data)[2]
@@ -211,40 +262,74 @@ function _cut_selection_update(
     # In Newsvendor ist der State fully observable
     # sampled_state = SampledState(state, cut.obj_y, cut.belief_y, cut, NaN)
     # sampled_state.best_objective = _eval_height(cut, sampled_state)
-    test_cut = SDDP.Cut(0, Dict(:x => 1), nothing, nothing, 1, nothing)
+    test_cut = SDDP.Cut(0.0, Dict(:x => 1.0), nothing, nothing, 1, nothing)
 
-    constr_ref_dict = Dict{Vector{Float64}, Union{JuMP.ConstraintRef, Nothing}}()
-    for cut_old in V.cuts
-        cut_key = [cut_old.intercept, cut_old.coefficients[:x]]
-        constr_ref_dict[cut_key] = cut_old.constraint_ref
-    end
-    # add new cut to data
-    constr_ref_dict[[cut.intercept, cut.coefficients[:x]]] = nothing
+    # constr_ref_dict = Dict{Vector{Float64}, Union{JuMP.ConstraintRef, Nothing}}()
+    # for cut_old in V.cuts
+    #     cut_key = [cut_old.intercept, cut_old.coefficients[:x]]
+    #     constr_ref_dict[cut_key] = cut_old.constraint_ref
+    # end
+    # # add new cut to data
+    # constr_ref_dict[[cut.intercept, cut.coefficients[:x]]] = cut.constraint_ref
 
-    pareto_keys = calc_pareto_front(
-        reduce(hcat, keys(constr_ref_dict))
-    )
-    pareto_cuts = Cut[]
-    for (intercept, coefs) in pareto_keys
-        pareto_cut = Cut(
-            intercept,
-            Dict(:x => coefs),
-            nothing,
-            nothing,
-            1,
-            constr_ref_dict[collect((intercept, coefs))]
-        )
-        push!(pareto_cuts, pareto_cut)
-    end
+    # pareto_keys = calc_pareto_front(
+    #     reduce(hcat, keys(constr_ref_dict))
+    # )
+    # pareto_cuts = Cut[]
+    # for (intercept, coefs) in pareto_keys
+    #     pareto_cut = Cut(
+    #         intercept,
+    #         Dict(:x => coefs),
+    #         nothing,
+    #         nothing,
+    #         1,
+    #         constr_ref_dict[collect((intercept, coefs))],
+    #         true, #is pareto dominant
+    #     )
+    #     push!(pareto_cuts, pareto_cut)
+    # end
+
+    push!(V.cuts, cut)
+
+    # for cut in V.cuts
+    #     if !cut_is_in(cut, pareto_cuts)
+    #         println("Der Cut $(cut.constraint_ref) wird geloescht")
+    #         JuMP.delete(model, cut.constraint_ref)
+    #         # if cut.constraint_ref !== nothing
+    #         # end
+    #     end
+    # end
 
     # V.cuts wird zwar upgedated aber die Constraints werden nicht aus dem Modell geloescht
-    V.cuts = pareto_cuts
+    # V.cuts = pareto_cuts
     # open("data_dict.json", "w") do file
     #     write(file, JSON.json(data))
     # end
-    # push!(V.cuts, cut)
 
 end
+
+
+function cut_is_in(cut::Cut, pareto_cuts::Array{Cut})
+    for pareto_cut in pareto_cuts
+        if is_equal_cut(cut, pareto_cut)
+            return true
+        end
+    end
+    return false
+end
+
+
+function is_equal_cut(cut1::Cut, cut2::Cut)
+    return (
+        cut1.intercept == cut2.intercept 
+        && cut1.coefficients == cut2.coefficients
+        && cut1.obj_y == cut2.obj_y
+        && cut1.belief_y == cut2.belief_y 
+        && cut1.non_dominated_count == cut2.non_dominated_count 
+        && cut1.constraint_ref == cut2.constraint_ref 
+    )
+end
+
 
 function _cut_selection_update(
     V::ConvexApproximation,
