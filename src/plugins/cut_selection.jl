@@ -83,3 +83,93 @@ function _cut_selection_update(
     empty!(V.cuts_to_be_deleted)
     return
 end
+
+# In V sind alle bisherigen Cuts abgepseichert und dann wird das ganze erweitert
+# mit dem neuen Cut 'cut' und dem momentanen State 'state'
+function _cut_selection_update(
+    V::ConvexApproximation,
+    cut::Cut,
+    state::Dict{Symbol,Float64},
+    iteration::Int;
+    stage::Int,
+)
+    println("neue cut selection mit multiple dispatch")
+    SDDP.count_update += 1
+    # println("hier laeuft die cut selection")
+    model = JuMP.owner_model(V.theta)
+    is_minimization = JuMP.objective_sense(model) == MOI.MIN_SENSE
+    # Ein sampled State entspricht dem x mit dem dann ein Cut generiert wird
+    # println("der belief ist $(cut.belief_y)")
+    # belief state war in Newsvendor nothin, macht auch Sinn da der Belief State etwas mit partially observable States zu tun hat
+    # In Newsvendor ist der State fully observable
+    # sampled_state = SampledState(state, cut.obj_y, cut.belief_y, cut, NaN)
+    # sampled_state.best_objective = _eval_height(cut, sampled_state)
+    test_cut = SDDP.Cut(0.0, Dict(:x => 1.0), nothing, nothing, 1, nothing)
+
+    # constr_ref_dict = Dict{Vector{Float64}, Union{JuMP.ConstraintRef, Nothing}}()
+    # for cut_old in V.cuts
+    #     cut_key = [cut_old.intercept, cut_old.coefficients[:x]]
+    #     constr_ref_dict[cut_key] = cut_old.constraint_ref
+    # end
+    # # add new cut to data
+    # constr_ref_dict[[cut.intercept, cut.coefficients[:x]]] = cut.constraint_ref
+
+    # pareto_keys = calc_pareto_front(
+    #     reduce(hcat, keys(constr_ref_dict))
+    # )
+    # pareto_cuts = Cut[]
+    # for (intercept, coefs) in pareto_keys
+    #     pareto_cut = Cut(
+    #         intercept,
+    #         Dict(:x => coefs),
+    #         nothing,
+    #         nothing,
+    #         1,
+    #         constr_ref_dict[collect((intercept, coefs))],
+    #         true, #is pareto dominant
+    #     )
+    #     push!(pareto_cuts, pareto_cut)
+    # end
+
+    push!(V.cuts, cut)
+    cuts_copy = deepcopy(V.cuts)
+    pareto_frontier!(cuts_copy)
+    filter!(c->c.pareto_dominant, cuts_copy) 
+    a = 1
+    # for cut in V.cuts
+    #     if !cut_is_in(cut, pareto_cuts)
+    #         println("Der Cut $(cut.constraint_ref) wird geloescht")
+    #         JuMP.delete(model, cut.constraint_ref)
+    #         # if cut.constraint_ref !== nothing
+    #         # end
+    #     end
+    # end
+
+    # V.cuts wird zwar upgedated aber die Constraints werden nicht aus dem Modell geloescht
+    # V.cuts = pareto_cuts
+    # open("data_dict.json", "w") do file
+    #     write(file, JSON.json(data))
+    # end
+
+end
+
+function cut_is_in(cut::Cut, pareto_cuts::Array{Cut})
+    for pareto_cut in pareto_cuts
+        if is_equal_cut(cut, pareto_cut)
+            return true
+        end
+    end
+    return false
+end
+
+
+function is_equal_cut(cut1::Cut, cut2::Cut)
+    return (
+        cut1.intercept == cut2.intercept 
+        && cut1.coefficients == cut2.coefficients
+        && cut1.obj_y == cut2.obj_y
+        && cut1.belief_y == cut2.belief_y 
+        && cut1.non_dominated_count == cut2.non_dominated_count 
+        && cut1.constraint_ref == cut2.constraint_ref 
+    )
+end

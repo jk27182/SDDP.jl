@@ -1,3 +1,6 @@
+# using Plots
+
+
 function pareto_frontier!(cuts::Array{Cut})
     # es muss noch ein Argument übergeben werden welches angibt in welcher Dimension die Daten gestackt sind
     # sort data via first entry
@@ -48,3 +51,4 @@ function viz_pareto_cuts(cuts::Array{Cut})::Plots.Plot
     p = plot(linear_cuts, pareto_sicht, layout=(1,2), size=(1000,500), linewidth=2)
     return p 
 end
+
