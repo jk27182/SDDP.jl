@@ -18,7 +18,6 @@ import SHA
 import Statistics
 import TimerOutputs
 
-using Debugger
 # Work-around for https://github.com/JuliaPlots/RecipesBase.jl/pull/55
 # Change this back to `import RecipesBase` once the fix is tagged.
 using RecipesBase
@@ -47,6 +46,7 @@ include("algorithm.jl")
 include("plugins/risk_measures.jl")
 include("plugins/sampling_schemes.jl")
 include("plugins/bellman_functions.jl")
+include("plugins/pareto_cuts.jl")
 include("plugins/cut_selection.jl")
 include("plugins/stopping_rules.jl")
 include("plugins/local_improvement_search.jl")
@@ -54,6 +54,11 @@ include("plugins/duality_handlers.jl")
 include("plugins/parallel_schemes.jl")
 include("plugins/backward_sampling_schemes.jl")
 include("plugins/forward_passes.jl")
+
+CUT_LISTE::Dict{Int, Any} = Dict()
+CUT_DICT = Dict{Any, Array{Cut}}(node => Cut[] for node in 1:2)
+count_update::Int = 0
+iter_count::Int = 0
 
 # Visualization related code.
 include("visualization/publication_plot.jl")
