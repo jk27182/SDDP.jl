@@ -1,5 +1,17 @@
 # using Plots
 
+function cut_is_dominated(pareto_front::Array{Cut}, cut::Cut)
+    for pareto_cut in pareto_front
+        intercept = pareto_cut.intercept
+        coef = pareto_cut.coefficients[:x]
+
+        cut_is_dominated = (cut.intercept < intercept) && (cut.coefficients[:x]  < coef)
+        if cut_is_dominated
+            return true
+        end
+    end
+    return false
+end
 
 function pareto_frontier!(cuts::Array{Cut})
     # es muss noch ein Argument übergeben werden welches angibt in welcher Dimension die Daten gestackt sind
