@@ -1,11 +1,23 @@
 # using Plots
 
-function cut_is_dominated(pareto_front::Array{Cut}, cut::Cut)
-    for pareto_cut in pareto_front
+function cut_is_dominated(V::ConvexApproximation, cut::Cut)
+    # pareto_front = V.cuts
+    for pareto_cut in V.cuts
         intercept = pareto_cut.intercept
-        coef = pareto_cut.coefficients[:x]
-
-        cut_is_dominated = (cut.intercept < intercept) && (cut.coefficients[:x]  < coef)
+        # use value of dictionary for comparison in all
+        # check coef domination
+        # assumes that atleast one coefficient exist, otherwise 
+        cut_coef_dominated = true
+        for (key, coef) in pareto_cut.coefficients
+            cut_coef_dominated = cut_coef_dominated && (cut.coefficients[key] <= coef)
+        end
+        # coef_dominated = all(
+        #     pair -> pair[2] <= coef,
+        #     pareto_cut.coefficients
+        # )
+        cut_is_dominated = (cut.intercept <= intercept) && cut_coef_dominated 
+        # coef = pareto_cut.coefficients[:x_storage]
+        # cut_is_dominated = (cut.intercept <= intercept) && (cut.coefficients[:x_storage]  <= coef)
         if cut_is_dominated
             return true
         end
