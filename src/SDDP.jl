@@ -17,12 +17,20 @@ import Random
 import SHA
 import Statistics
 import TimerOutputs
+import Plots
+import Logging
 
 # Work-around for https://github.com/JuliaPlots/RecipesBase.jl/pull/55
 # Change this back to `import RecipesBase` once the fix is tagged.
 using RecipesBase
 
 export @stageobjective
+
+include("plugins/settings.jl")
+
+logger = Logging.ConsoleLogger(stdout, SETTINGS["log_level"])
+Logging.global_logger(logger)
+
 
 # Modelling interface.
 include("user_interface.jl")

@@ -101,7 +101,7 @@ end
 # Let's compare the cost of operating the two models:
 
 function train_and_compute_cost(model)
-    SDDP.train(model; print_level = 0)
+    @time SDDP.train(model; print_level = 0)
     return println("Cost = \$", SDDP.calculate_bound(model))
 end
 

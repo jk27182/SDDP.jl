@@ -37,6 +37,7 @@ function forward_pass(
     end
     # Storage for the list of outgoing states that we visit on the forward pass.
     sampled_states = Dict{Symbol,Float64}[]
+    @debug "sampled states" sampled_states
     # Storage for the belief states: partition index and the belief dictionary.
     belief_states = Tuple{Int,Dict{T,Float64}}[]
     current_belief = initialize_belief(model)
@@ -94,6 +95,7 @@ function forward_pass(
         end
         # ===== End: starting state for infinite horizon =====
         # Solve the subproblem, note that `duality_handler = nothing`.
+        @debug "solve subproblem"
         TimerOutputs.@timeit model.timer_output "solve_subproblem" begin
             subproblem_results = solve_subproblem(
                 model,
