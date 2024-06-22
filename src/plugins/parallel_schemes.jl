@@ -42,6 +42,9 @@ function master_loop(
     _initialize_solver(model; throw_error = false)
     while true
         result = iteration(model, options)
+        open("Selected_Cuts.txt", "w") do file
+            write(file, string(SDDP.CUT_DICT) * "\n")
+        end
         options.post_iteration_callback(result)
         log_iteration(options)
         if result.has_converged
@@ -152,8 +155,9 @@ function slave_update(model::PolicyGraph, result::IterationResult)
                 cut.x,
                 cut.obj_y,
                 cut.belief_y;
-                cut_selection = true,
+                cut_selection = SETTINGS["use_cut_selection"],
                 cut_buffering = true,
+                stage=node_index,
             )
         end
     end
