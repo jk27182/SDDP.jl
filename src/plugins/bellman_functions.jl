@@ -86,6 +86,10 @@ mutable struct ConvexApproximation
     sampled_states::Vector{SampledState}
     cuts_to_be_deleted::Vector{Cut}
     deletion_minimum::Int
+    current_max_cut_points::Vector{Float64}
+    # stage=>Dict(coef_i=>max_val_i)
+    max_cut_coefs::Dict
+    min_cut_coefs::Dict
 
     function ConvexApproximation(
         theta::JuMP.VariableRef,
@@ -103,6 +107,7 @@ mutable struct ConvexApproximation
             SampledState[],
             Cut[], #cuts to be deleted
             deletion_minimum,
+            Float64[],
         )
     end
 end
@@ -135,6 +140,31 @@ function _dynamic_range_warning(intercept, coefficients)
       inflow into a reservoir to 10 decimal places.""",
             maxlog = 1,
         )
+    end
+    return
+end
+function _add_cut_pareto(
+    V::ConvexApproximation,
+    θᵏ::Float64, #intercept
+    πᵏ::Dict{Symbol,Float64},
+    xᵏ::Dict{Symbol,Float64}, #state
+    obj_y::Union{Nothing,NTuple{N,Float64}},
+    belief_y::Union{Nothing,Dict{T,Float64}};
+    cut_selection::Bool = SETTINGS["use_cut_selection"],
+    cut_buffering::Bool,
+    stage::Int,
+) where {N,T}
+    # key ist der State und x ist dann der Wert des States x^k
+    for (key, x) in xᵏ
+        θᵏ -= πᵏ[key] * x
+    end
+    _dynamic_range_warning(θᵏ, πᵏ)
+    cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
+    cut_dominated = cut_is_dominated(V, cut)
+    if !cut_dominated
+        _add_cut_constraint_to_model(V, cut)
+        push!(V.cuts, cut)
+        # print(1)
     end
     return
 end
@@ -232,8 +262,19 @@ function _add_cut(
             cut_buffering,
             stage,
         )
+        
+        if SDDP.iter_count % SETTINGS["prune_interval"] == 0
+            _prune_cuts(V)
+        end
+
     end
 end
+
+
+function _prune_cuts(V::ConvexApproximation)
+    # TODO: Implement cut pruning logic here
+end
+
 
 # Mark
 function _add_cut_constraint_to_model(V::ConvexApproximation, cut::Cut)
