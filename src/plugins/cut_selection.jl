@@ -174,28 +174,31 @@ end
     This function iterates over all nodes in the model and removes the cuts that are not Pareto dominant.
     A cut is considered Pareto dominant if there is no other cut that is better in both the coefficients and intercept.
 """
+const to = TimerOutputs.TimerOutput()
+
 function prune_cuts!(model::PolicyGraph{T}) where T
     println("ich bin in prune cuts!!!!!!!!!!!")
 
-    for (stage, node) in model.nodes
-        cuts = node.bellman_function.global_theta.cuts
-        pareto_dominant_cuts = SDDP.bnl!(cuts)
-        # cuts that need to be deleted
+    TimerOutputs.@timeit to "whole thing" begin
         println("-----------------")
-        println("Cuts that are pareto dominant: $pareto_dominant_cuts")
+        for (stage, node) in model.nodes
+            cuts = node.bellman_function.global_theta.cuts
+            TimerOutputs.@timeit to "bnl" pareto_dominant_cuts = SDDP.bnl!(cuts)
+            # cuts that need to be deleted
 
-        # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
+            # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
 
-        println("Cuts that need to be deleted: $(filter(cut -> !cut.pareto_dominant, cuts))")
-        println("-----------------")
+            println("In stage $stage  #Cuts that need to be deleted: $(length(filter(cut -> !cut.pareto_dominant, cuts)))")
 
-        for dominated_cut in filter(cut -> !cut.pareto_dominant, cuts)
-            println("Cut that needs to be deleted: $dominated_cut")
-            if dominated_cut.constraint_ref !== nothing
-                JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
-                dominated_cut.constraint_ref = nothing
-                dominated_cut.non_dominated_count = 0
+            for dominated_cut in filter(cut -> !cut.pareto_dominant, cuts)
+                println("Cut that needs to be deleted: $dominated_cut")
+                if dominated_cut.constraint_ref !== nothing
+                    JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
+                    dominated_cut.constraint_ref = nothing
+                    dominated_cut.non_dominated_count = 0
+                end
             end
         end
+        println("-----------------")
     end
 end
