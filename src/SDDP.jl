@@ -26,7 +26,7 @@ using RecipesBase
 
 export @stageobjective
 
-include("plugins/settings.jl")
+SETTINGS = JSON.Parser.parsefile("/Users/janik/Documents/Master/KIT/Masterarbeit/src/SDDP.jl/src/plugins/settings.json")
 
 logger = Logging.ConsoleLogger(stdout, SETTINGS["log_level"])
 Logging.global_logger(logger)
