@@ -1,4 +1,4 @@
-# using Plots
+import Plots, Colors
 
 
 function pareto_selection_update(V::ConvexApproximation, cut::Cut)
@@ -84,7 +84,11 @@ Compute the Pareto front of the given data using the Block Nested Loop (BNL) alg
 An array of cuts representing the Pareto front.
 
 """
-function bnl!(data)
+function bnl!(data::Array{SDDP.Cut})
+    if length(data) < 2
+        return data
+    end
+
     window = [data[1]]
     for cut in data[2:end]
         dominated = false
@@ -105,16 +109,21 @@ function bnl!(data)
             push!(window, cut)
         end
     end
+
+    for cut in window
+        cut.pareto_dominant = true
+    end
+
     return window
 end
 
 
 
 function viz_pareto_cuts(cuts::Array{Cut})::Plots.Plot
-    color_palette = distinguishable_colors(length(cuts))
+    color_palette = Colors.distinguishable_colors(length(cuts))
     cut_dominates = getfield.(cuts, :pareto_dominant)
     marker_mask = ifelse.(cut_dominates, :star6, :circle)
-    pareto_sicht = scatter(
+    pareto_sicht = Plots.scatter(
         map(c->c.intercept, cuts),
         map(c->c.coefficients[:x], cuts),
         color=color_palette,
@@ -125,14 +134,14 @@ function viz_pareto_cuts(cuts::Array{Cut})::Plots.Plot
         markersize=10,
         markershape=marker_mask,
     )
-    linear_cuts = plot(title="Cuts", legend=false)
+    linear_cuts = Plots.plot(title="Cuts", legend=false)
     for (i,cut) in enumerate(cuts)
         linear_cut(x) = cut.intercept + cut.coefficients[:x]*x
-        plot!(linear_cuts, 0:0.01:.25, linear_cut, color=color_palette[i], linewidth=3)
+        Plots.plot!(linear_cuts, 0:0.01:.25, linear_cut, color=color_palette[i], linewidth=3)
     end 
-    plot!([0], seriestype=:vline, color=:red)
+    Plots.plot!([0], seriestype=:vline, color=:red)
 
-    p = plot(linear_cuts, pareto_sicht, layout=(1,2), size=(1000,500), linewidth=2)
+    p = Plots.plot(linear_cuts, pareto_sicht, layout=(1,2), size=(1000,500), linewidth=2)
     return p 
 end
 
