@@ -34,6 +34,7 @@ Base.show(io::IO, ::Serial) = print(io, "serial mode")
 
 interrupt(::Serial) = nothing
 
+
 function master_loop(
     ::Serial,
     model::PolicyGraph{T},
@@ -41,10 +42,13 @@ function master_loop(
 ) where {T}
     _initialize_solver(model; throw_error = false)
     while true
+        # result is an IterationResult, hat die Variable "cuts"
+        # 
         result = iteration(model, options)
-        open("Selected_Cuts.txt", "w") do file
-            write(file, string(SDDP.CUT_DICT) * "\n")
-        end
+        prune_cuts(model)
+        # open("Selected_Cuts.txt", "w") do file
+        #     write(file, string(SDDP.CUT_DICT) * "\n")
+        # end
         options.post_iteration_callback(result)
         log_iteration(options)
         if result.has_converged
@@ -53,6 +57,7 @@ function master_loop(
     end
     return
 end
+
 
 function _simulate(
     model::PolicyGraph,

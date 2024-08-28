@@ -99,7 +99,6 @@ function _cut_selection_update_pareto_efficient(
         cut.pareto_dominant = true
         push!(V.cuts, cut)
     end
-    a = 1
 end
 
 function _cut_selection_update_pareto(
@@ -170,3 +169,54 @@ function is_equal_cut(cut1::Cut, cut2::Cut)
         && cut1.constraint_ref == cut2.constraint_ref 
     )
 end
+
+
+function prune_cuts(model)
+    for node in model
+        opt_problem = node.subproblem
+        cuts = node.bellman_function.global_theta.cuts
+
+        # for cut in node.bellman_function.cuts_to_be_deleted
+        #     if cut.constraint_ref !== nothing
+        #         JuMP.delete(node.bellman_function.model, cut.constraint_ref)
+        #         cut.constraint_ref = nothing
+        #         cut.non_dominated_count = 0
+        #     end
+        # end
+        
+    end
+end
+
+#     for node in model
+#         if node.bellman_function.global_theta !== nothing
+#             for (key, value) in node.bellman_function.global_theta
+#                 if value.cuts !== nothing
+#                     for cut in value.cuts
+#                         if cut === nothing
+#                             error(
+#                                 "This model uses features that are not suppored in async " *
+#                                 "mode. Use `parallel_scheme = Serial()` instead.",
+#                             )
+#                         end
+#                         if cut.non_dominated_count < 1
+#                             if cut.constraint_ref !== nothing
+#                                 push!(node.bellman_function.cuts_to_be_deleted, cut)
+#                             end
+#                         end
+#                     end
+#                 end
+#             end
+#         end
+#     end
+#     for node in model
+#         for cut in node.bellman_function.cuts_to_be_deleted
+#             if cut.constraint_ref !== nothing
+#                 JuMP.delete(node.bellman_function.model, cut.constraint_ref)
+#                 cut.constraint_ref = nothing
+#                 cut.non_dominated_count = 0
+#             end
+#         end
+#         empty!(node.bellman_function.cuts_to_be_deleted)
+#     end
+#     return   
+# end

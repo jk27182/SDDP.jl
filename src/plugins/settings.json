@@ -3,6 +3,5 @@
     "log_level": 0,
     "benchmark_mode": false,
     "use_cut_selection": true,
-    // interval for pruning the cuts
     "prune_interval": 25
 }
