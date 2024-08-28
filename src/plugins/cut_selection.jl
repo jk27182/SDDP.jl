@@ -1,9 +1,8 @@
 function _write_cut_buffer(file_name::String)
     open(file_name, "w") do file
-        write(file, CUT_BUFFER)
-    end 
+        return write(file, CUT_BUFFER)
+    end
 end
-
 
 function _cut_selection_update(
     V::ConvexApproximation,
@@ -114,8 +113,8 @@ function _cut_selection_update_pareto(
     push!(V.cuts, cut)
     cuts_copy = deepcopy(V.cuts)
     pareto_frontier!(cuts_copy)
-    filter!(c->c.pareto_dominant, cuts_copy) 
-    a = 1
+    filter!(c -> c.pareto_dominant, cuts_copy)
+    return a = 1
 end
 
 # In V sind alle bisherigen Cuts abgepseichert und dann wird das ganze erweitert
@@ -158,65 +157,45 @@ function cut_is_in(cut::Cut, pareto_cuts::Array{Cut})
     return false
 end
 
-
 function is_equal_cut(cut1::Cut, cut2::Cut)
     return (
-        cut1.intercept == cut2.intercept 
-        && cut1.coefficients == cut2.coefficients
-        && cut1.obj_y == cut2.obj_y
-        && cut1.belief_y == cut2.belief_y 
-        && cut1.non_dominated_count == cut2.non_dominated_count 
-        && cut1.constraint_ref == cut2.constraint_ref 
+        cut1.intercept == cut2.intercept &&
+        cut1.coefficients == cut2.coefficients &&
+        cut1.obj_y == cut2.obj_y &&
+        cut1.belief_y == cut2.belief_y &&
+        cut1.non_dominated_count == cut2.non_dominated_count &&
+        cut1.constraint_ref == cut2.constraint_ref
     )
 end
 
+"""
+    prune_cuts!(model::PolicyGraph)
 
-function prune_cuts(model)
-    for node in model
-        opt_problem = node.subproblem
+    This function iterates over all nodes in the model and removes the cuts that are not Pareto dominant.
+    A cut is considered Pareto dominant if there is no other cut that is better in both the coefficients and intercept.
+"""
+function prune_cuts!(model::PolicyGraph{T}) where T
+    println("ich bin in prune cuts!!!!!!!!!!!")
+
+    for (stage, node) in model.nodes
         cuts = node.bellman_function.global_theta.cuts
+        pareto_dominant_cuts = SDDP.bnl!(cuts)
+        # cuts that need to be deleted
+        println("-----------------")
+        println("Cuts that are pareto dominant: $pareto_dominant_cuts")
 
-        # for cut in node.bellman_function.cuts_to_be_deleted
-        #     if cut.constraint_ref !== nothing
-        #         JuMP.delete(node.bellman_function.model, cut.constraint_ref)
-        #         cut.constraint_ref = nothing
-        #         cut.non_dominated_count = 0
-        #     end
-        # end
-        
+        # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
+
+        println("Cuts that need to be deleted: $(filter(cut -> !cut.pareto_dominant, cuts))")
+        println("-----------------")
+
+        for dominated_cut in filter(cut -> !cut.pareto_dominant, cuts)
+            println("Cut that needs to be deleted: $dominated_cut")
+            if dominated_cut.constraint_ref !== nothing
+                JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
+                dominated_cut.constraint_ref = nothing
+                dominated_cut.non_dominated_count = 0
+            end
+        end
     end
 end
-
-#     for node in model
-#         if node.bellman_function.global_theta !== nothing
-#             for (key, value) in node.bellman_function.global_theta
-#                 if value.cuts !== nothing
-#                     for cut in value.cuts
-#                         if cut === nothing
-#                             error(
-#                                 "This model uses features that are not suppored in async " *
-#                                 "mode. Use `parallel_scheme = Serial()` instead.",
-#                             )
-#                         end
-#                         if cut.non_dominated_count < 1
-#                             if cut.constraint_ref !== nothing
-#                                 push!(node.bellman_function.cuts_to_be_deleted, cut)
-#                             end
-#                         end
-#                     end
-#                 end
-#             end
-#         end
-#     end
-#     for node in model
-#         for cut in node.bellman_function.cuts_to_be_deleted
-#             if cut.constraint_ref !== nothing
-#                 JuMP.delete(node.bellman_function.model, cut.constraint_ref)
-#                 cut.constraint_ref = nothing
-#                 cut.non_dominated_count = 0
-#             end
-#         end
-#         empty!(node.bellman_function.cuts_to_be_deleted)
-#     end
-#     return   
-# end

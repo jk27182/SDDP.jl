@@ -41,19 +41,21 @@ function master_loop(
     options::Options,
 ) where {T}
     _initialize_solver(model; throw_error = false)
+    iteration_counter = 1
     while true
-        # result is an IterationResult, hat die Variable "cuts"
-        # 
+
         result = iteration(model, options)
-        prune_cuts(model)
-        # open("Selected_Cuts.txt", "w") do file
-        #     write(file, string(SDDP.CUT_DICT) * "\n")
-        # end
+        if (iteration_counter % SETTINGS["prune_interval"]) == 0
+            println("Conduct cut pruning")
+            prune_cuts!(model)
+        end
+
         options.post_iteration_callback(result)
         log_iteration(options)
         if result.has_converged
             return result.status
         end
+        iteration_counter += 1
     end
     return
 end
