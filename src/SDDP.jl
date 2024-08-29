@@ -28,15 +28,15 @@ export @stageobjective
 
 
 include("settings.jl")
-const settings = Settings(
-    use_pareto_cut_logic = true,
-    log_level = 1,
-    use_cut_selection = true,
-    use_pruning = false,
-    prune_interval = 10, 
-)
-# SETTINGS = JSON.Parser.parsefile("/Users/janik/Documents/Master/KIT/Masterarbeit/src/SDDP.jl/src/plugins/settings.json")
 
+const settings = Settings(
+    use_pareto_cut_logic = false,
+    log_level = 1,
+    use_cut_selection = false,
+    use_pruning = true,
+    prune_interval = 10, 
+    debug_mode=false,
+)
 logger = Logging.ConsoleLogger(stdout, settings.get("log_level"))
 Logging.global_logger(logger)
 
