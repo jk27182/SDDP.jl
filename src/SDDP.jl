@@ -26,9 +26,18 @@ using RecipesBase
 
 export @stageobjective
 
-SETTINGS = JSON.Parser.parsefile("/Users/janik/Documents/Master/KIT/Masterarbeit/src/SDDP.jl/src/plugins/settings.json")
 
-logger = Logging.ConsoleLogger(stdout, SETTINGS["log_level"])
+include("settings.jl")
+const settings = Settings(
+    use_pareto_cut_logic = true,
+    log_level = 1,
+    use_cut_selection = true,
+    use_pruning = false,
+    prune_interval = 10, 
+)
+# SETTINGS = JSON.Parser.parsefile("/Users/janik/Documents/Master/KIT/Masterarbeit/src/SDDP.jl/src/plugins/settings.json")
+
+logger = Logging.ConsoleLogger(stdout, settings.get("log_level"))
 Logging.global_logger(logger)
 
 

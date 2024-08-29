@@ -143,31 +143,32 @@ function _dynamic_range_warning(intercept, coefficients)
     end
     return
 end
-function _add_cut_pareto(
-    V::ConvexApproximation,
-    θᵏ::Float64, #intercept
-    πᵏ::Dict{Symbol,Float64},
-    xᵏ::Dict{Symbol,Float64}, #state
-    obj_y::Union{Nothing,NTuple{N,Float64}},
-    belief_y::Union{Nothing,Dict{T,Float64}};
-    cut_selection::Bool = SETTINGS["use_cut_selection"],
-    cut_buffering::Bool,
-    stage::Int,
-) where {N,T}
-    # key ist der State und x ist dann der Wert des States x^k
-    for (key, x) in xᵏ
-        θᵏ -= πᵏ[key] * x
-    end
-    _dynamic_range_warning(θᵏ, πᵏ)
-    cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
-    cut_dominated = cut_is_dominated(V, cut)
-    if !cut_dominated
-        _add_cut_constraint_to_model(V, cut)
-        push!(V.cuts, cut)
-        # print(1)
-    end
-    return
-end
+
+# function _add_cut_pareto(
+#     V::ConvexApproximation,
+#     θᵏ::Float64, #intercept
+#     πᵏ::Dict{Symbol,Float64},
+#     xᵏ::Dict{Symbol,Float64}, #state
+#     obj_y::Union{Nothing,NTuple{N,Float64}},
+#     belief_y::Union{Nothing,Dict{T,Float64}};
+#     cut_selection::Bool = SETTINGS["use_cut_selection"],
+#     cut_buffering::Bool,
+#     stage::Int,
+# ) where {N,T}
+#     # key ist der State und x ist dann der Wert des States x^k
+#     for (key, x) in xᵏ
+#         θᵏ -= πᵏ[key] * x
+#     end
+#     _dynamic_range_warning(θᵏ, πᵏ)
+#     cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
+#     cut_dominated = cut_is_dominated(V, cut)
+#     if !cut_dominated
+#         _add_cut_constraint_to_model(V, cut)
+#         push!(V.cuts, cut)
+#         # print(1)
+#     end
+#     return
+# end
 
 function _add_cut_pareto(
     V::ConvexApproximation,
@@ -176,7 +177,7 @@ function _add_cut_pareto(
     xᵏ::Dict{Symbol,Float64}, #state
     obj_y::Union{Nothing,NTuple{N,Float64}},
     belief_y::Union{Nothing,Dict{T,Float64}};
-    cut_selection::Bool = SETTINGS["use_cut_selection"],
+    cut_selection::Bool = settings.get("use_cut_selection"),
     cut_buffering::Bool,
     stage::Int,
 ) where {N,T}
@@ -202,7 +203,7 @@ function _add_cut_normal(
     xᵏ::Dict{Symbol,Float64}, #state
 obj_y::Union{Nothing,NTuple{N,Float64}},
     belief_y::Union{Nothing,Dict{T,Float64}};
-    cut_selection::Bool = SETTINGS["use_cut_selection"],
+    cut_selection::Bool = settings.get("use_cut_selection"),
     cut_buffering::Bool,
     stage::Int,
 ) where {N,T}
@@ -232,12 +233,12 @@ function _add_cut(
     xᵏ::Dict{Symbol,Float64}, #state
     obj_y::Union{Nothing,NTuple{N,Float64}},
     belief_y::Union{Nothing,Dict{T,Float64}};
-    cut_selection::Bool = SETTINGS["use_cut_selection"],
+    cut_selection::Bool = settings.get("use_cut_selection"),
     cut_buffering::Bool,
     stage::Int,
 ) where {N,T}
-    if SETTINGS["use_pareto_cut_logic"]
-        @debug "Using pareto cutting scheme"
+    if settings.get("use_pareto_cut_logic")
+        Logging.@debug "Using pareto cutting scheme"
         _add_cut_pareto(
             V,
             θᵏ,
@@ -250,7 +251,7 @@ function _add_cut(
             stage,
         )
     else
-        @debug "Using regular cutting scheme"
+        Logging.@debug "Using regular cutting scheme"
         _add_cut_normal(
             V,
             θᵏ,
@@ -262,18 +263,10 @@ function _add_cut(
             cut_buffering,
             stage,
         )
-        
-        if SDDP.iter_count % SETTINGS["prune_interval"] == 0
-            _prune_cuts(V)
-        end
 
     end
 end
 
-
-function _prune_cuts(V::ConvexApproximation)
-    # TODO: Implement cut pruning logic here
-end
 
 
 # Mark
