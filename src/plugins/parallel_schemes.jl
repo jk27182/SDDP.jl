@@ -45,14 +45,19 @@ function master_loop(
     while true
 
         result = iteration(model, options)
-        if (iteration_counter % SETTINGS["prune_interval"]) == 0
+
+        if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
             println("Conduct cut pruning")
-            prune_cuts!(model)
+            # prune_cuts!(model)
         end
 
         options.post_iteration_callback(result)
         log_iteration(options)
+
         if result.has_converged
+            open("data/tracking_bound_time/$(settings.get_setting_id()).json", "w") do file
+                JSON.print(file, options.log)
+            end
             return result.status
         end
         iteration_counter += 1
@@ -162,7 +167,7 @@ function slave_update(model::PolicyGraph, result::IterationResult)
                 cut.x,
                 cut.obj_y,
                 cut.belief_y;
-                cut_selection = SETTINGS["use_cut_selection"],
+                cut_selection = settings.get("use_cut_selection"),
                 cut_buffering = true,
                 stage=node_index,
             )

@@ -28,12 +28,11 @@ export @stageobjective
 
 
 include("settings.jl")
-
 const settings = Settings(
     use_pareto_cut_logic = false,
     log_level = 1,
     use_cut_selection = false,
-    use_pruning = true,
+    use_pruning = false,
     prune_interval = 10, 
     debug_mode=false,
 )
@@ -72,10 +71,6 @@ include("plugins/parallel_schemes.jl")
 include("plugins/backward_sampling_schemes.jl")
 include("plugins/forward_passes.jl")
 
-CUT_LISTE::Dict{Int, Any} = Dict()
-CUT_DICT = Dict{Any, Array{Cut}}(node => Cut[] for node in 1:2)
-count_update::Int = 0
-iter_count::Int = 0
 
 # Visualization related code.
 include("visualization/publication_plot.jl")
