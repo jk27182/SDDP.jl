@@ -47,13 +47,14 @@ mutable struct Settings
         get(x::String) = getfield(settings, Symbol(x))
 
         function get_setting_id()
-            pareto_str = get(:use_pareto_cut_logic) ? "ParetoCuts" : ""
-            cut_selection_str = get(:use_cut_selection) ? "StandardCutSelection" : ""
-            pruning_str = get(:use_pruning) ?  "Pruning$(get(:prune_interval)))" : ""
+            pareto_str = get(:use_pareto_cut_logic) ? "ParetoCuts_" : ""
+            cut_selection_str = get(:use_cut_selection) ? "StandardCutSelection_" : ""
+            pruning_str = get(:use_pruning) ?  "Pruning$(get(:prune_interval))" : ""
 
-            id_str = join([pareto_str, cut_selection_str, pruning_str], "_")
+            # id_str = "Results_$(join([pareto_str, cut_selection_str, pruning_str], "_"))"
+            id_str = "Results_$(pareto_str)$(cut_selection_str)$(pruning_str)"
 
-            return isempty(id_str) ? "Default" : id_str
+            return isempty(id_str) ? "Results_Default" : id_str
         end
 
         return (; set!, get, get_setting_id)

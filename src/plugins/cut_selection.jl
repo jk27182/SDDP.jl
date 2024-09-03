@@ -9,7 +9,6 @@ function _cut_selection_update(
     cut::Cut,
     state::Dict{Symbol,Float64};
 )
-    SDDP.count_update += 1
     # println("hier laeuft die cut selection")
     model = JuMP.owner_model(V.theta)
     is_minimization = JuMP.objective_sense(model) == MOI.MIN_SENSE
@@ -88,7 +87,6 @@ function _cut_selection_update_pareto_efficient(
     state::Dict{Symbol,Float64},
 )
     println("neue cut selection mit multiple dispatch")
-    SDDP.count_update += 1
     # println("hier laeuft die cut selection")
     if !cut_is_dominated(V.cuts, cut)
         cut.pareto_dominant = true
@@ -102,7 +100,6 @@ function _cut_selection_update_pareto(
     state::Dict{Symbol,Float64},
 )
     println("neue cut selection mit multiple dispatch")
-    SDDP.count_update += 1
     # println("hier laeuft die cut selection")
     push!(V.cuts, cut)
     cuts_copy = deepcopy(V.cuts)
