@@ -219,8 +219,6 @@ obj_y::Union{Nothing,NTuple{N,Float64}},
             cut,
             xᵏ;
             # xᵏ,
-            iteration=SDDP.iter_count,
-            stage=stage,
         )
     end
     return

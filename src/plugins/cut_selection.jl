@@ -8,8 +8,6 @@ function _cut_selection_update(
     V::ConvexApproximation,
     cut::Cut,
     state::Dict{Symbol,Float64};
-    iteration::Int,
-    stage::Int,
 )
     SDDP.count_update += 1
     # println("hier laeuft die cut selection")
@@ -88,8 +86,6 @@ function _cut_selection_update_pareto_efficient(
     V::ConvexApproximation,
     cut::Cut,
     state::Dict{Symbol,Float64},
-    iteration::Int;
-    stage::Int,
 )
     println("neue cut selection mit multiple dispatch")
     SDDP.count_update += 1
@@ -104,8 +100,6 @@ function _cut_selection_update_pareto(
     V::ConvexApproximation,
     cut::Cut,
     state::Dict{Symbol,Float64},
-    iteration::Int;
-    stage::Int,
 )
     println("neue cut selection mit multiple dispatch")
     SDDP.count_update += 1
@@ -168,12 +162,7 @@ function is_equal_cut(cut1::Cut, cut2::Cut)
     )
 end
 
-const to = TimerOutputs.TimerOutput()
-if settings.get("debug_mode")
-    TimerOutputs.enable_timer!(to)
-else
-    TimerOutputs.disable_timer!(to)
-end
+
 """
     prune_cuts!(model::PolicyGraph)
 
@@ -182,26 +171,23 @@ end
 """
 function prune_cuts!(model::PolicyGraph{T}) where T
     Logging.@debug("ich bin in prune cuts!!!!!!!!!!!")
-    TimerOutputs.@timeit to "whole thing" begin
-        Logging.@debug("-----------------")
-        for (stage, node) in model.nodes
-            cuts = node.bellman_function.global_theta.cuts
-            TimerOutputs.@timeit to "bnl" pareto_dominant_cuts = SDDP.bnl!(cuts)
-            # cuts that need to be deleted
+    Logging.@debug("-----------------")
+    for (stage, node) in model.nodes
+        cuts = node.bellman_function.global_theta.cuts
+        pareto_dominant_cuts = SDDP.bnl!(cuts)
+        # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
 
-            # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
+        Logging.@debug("In stage $stage  #Cuts that need to be deleted: $(length(filter(cut -> !cut.pareto_dominant, cuts)))")
 
-            Logging.@debug("In stage $stage  #Cuts that need to be deleted: $(length(filter(cut -> !cut.pareto_dominant, cuts)))")
-
-            for dominated_cut in filter(cut -> !cut.pareto_dominant, cuts)
-                Logging.@debug("Cut that needs to be deleted: $dominated_cut")
-                if dominated_cut.constraint_ref !== nothing
-                    JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
-                    dominated_cut.constraint_ref = nothing
-                    dominated_cut.non_dominated_count = 0
-                end
+        for dominated_cut in filter(cut -> !cut.pareto_dominant, cuts)
+            Logging.@debug("Cut that needs to be deleted: $dominated_cut")
+            if dominated_cut.constraint_ref !== nothing
+                JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
+                dominated_cut.constraint_ref = nothing
+                dominated_cut.non_dominated_count = 0
             end
         end
+        node.bellman_function.global_theta.cuts = pareto_dominant_cuts
         Logging.@debug("-----------------")
     end
 end
