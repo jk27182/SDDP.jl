@@ -5,6 +5,8 @@ mutable struct Settings
     use_pruning::Bool
     prune_interval::Int
     debug_mode::Bool
+    problem_name::String
+    cut_type::Union{Enum, Nothing} 
 
     # use a closure to store the settings and prevent public acces
     function Settings(;
@@ -14,6 +16,8 @@ mutable struct Settings
         use_pruning::Bool,
         prune_interval::Int,
         debug_mode::Bool,
+        problem_name::String="",
+        cut_type::Union{Enum, Nothing}=nothing,
     )
         settings = new(
             use_pareto_cut_logic,
@@ -22,6 +26,8 @@ mutable struct Settings
             use_pruning,
             prune_interval,
             debug_mode,
+            problem_name,
+            cut_type,
         )
         function set!(;
             use_pareto_cut_logic::Bool,
@@ -30,6 +36,8 @@ mutable struct Settings
             use_pruning::Bool,
             prune_interval::Int,
             debug_mode::Bool,
+            problem_name::String,
+            cut_type::Enum,   
         )
             settings.use_pareto_cut_logic = use_pareto_cut_logic
             settings.log_level = log_level
@@ -37,6 +45,8 @@ mutable struct Settings
             settings.use_pruning = use_pruning
             settings.prune_interval = prune_interval
             settings.debug_mode = debug_mode
+            settings.problem_name = problem_name
+            settings.cut_type = cut_type    
             return
         end
         set!(field::Symbol, value) = setfield!(settings, field, value)
@@ -47,14 +57,14 @@ mutable struct Settings
         get(x::String) = getfield(settings, Symbol(x))
 
         function get_setting_id()
+            cut_str = get(:cut_type) == SINGLE_CUT ? "SingleCut_" : "MultiCut_"
             pareto_str = get(:use_pareto_cut_logic) ? "ParetoCuts_" : ""
             cut_selection_str = get(:use_cut_selection) ? "StandardCutSelection_" : ""
             pruning_str = get(:use_pruning) ?  "Pruning$(get(:prune_interval))" : ""
 
-            # id_str = "Results_$(join([pareto_str, cut_selection_str, pruning_str], "_"))"
-            id_str = "Results_$(pareto_str)$(cut_selection_str)$(pruning_str)"
-
-            return isempty(id_str) ? "Results_Default" : id_str
+            id_str = pareto_str * cut_selection_str * pruning_str
+            id_str = isempty(id_str) ? "DefaultSDDP" : id_str
+            return id_str * cut_str
         end
 
         return (; set!, get, get_setting_id)

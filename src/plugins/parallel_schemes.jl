@@ -43,7 +43,6 @@ function master_loop(
     _initialize_solver(model; throw_error = false)
     iteration_counter = 1
     while true
-
         result = iteration(model, options)
 
         if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
@@ -55,9 +54,15 @@ function master_loop(
         log_iteration(options)
 
         if result.has_converged
-            open("data/tracking_bound_time/$(settings.get_setting_id()).json", "w") do file
+            println("Print logs to file $(settings.get_setting_id()).json")
+
+            dirname = mkpath("data/results_tracking_bound_time/$(settings.get(:problem_name))")
+            filename = "$(settings.get_setting_id()).json"
+
+            open(joinpath(dirname, filename), "w") do file
                 JSON.print(file, options.log)
             end
+
             return result.status
         end
         iteration_counter += 1
