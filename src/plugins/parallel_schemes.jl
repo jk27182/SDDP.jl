@@ -47,7 +47,7 @@ function master_loop(
 
         if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
             println("Conduct cut pruning")
-            # prune_cuts!(model)
+            prune_cuts!(model)
         end
 
         options.post_iteration_callback(result)
