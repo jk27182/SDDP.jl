@@ -86,6 +86,7 @@ An array of cuts representing the Pareto front.
 """
 function bnl!(data::Array{SDDP.Cut})
     if length(data) < 2
+        data[1].pareto_dominant = true
         return data
     end
 
