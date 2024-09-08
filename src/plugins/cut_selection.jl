@@ -166,25 +166,55 @@ end
     This function iterates over all nodes in the model and removes the cuts that are not Pareto dominant.
     A cut is considered Pareto dominant if there is no other cut that is better in both the coefficients and intercept.
 """
-function prune_cuts!(model::PolicyGraph{T}) where T
+function prune_cuts!(::SDDP.SINGLE_CUT, model::PolicyGraph{T}) where T
     Logging.@debug("ich bin in prune cuts!!!!!!!!!!!")
     Logging.@debug("-----------------")
     for (stage, node) in model.nodes
-        cuts = node.bellman_function.global_theta.cuts
-        pareto_dominant_cuts = SDDP.bnl!(cuts)
-        # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
-
-        Logging.@debug("In stage $stage  #Cuts that need to be deleted: $(length(filter(cut -> !cut.pareto_dominant, cuts)))")
-
-        for dominated_cut in filter(cut -> !cut.pareto_dominant, cuts)
-            Logging.@debug("Cut that needs to be deleted: $dominated_cut")
-            if dominated_cut.constraint_ref !== nothing
-                JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
-                dominated_cut.constraint_ref = nothing
-                dominated_cut.non_dominated_count = 0
-            end
-        end
-        node.bellman_function.global_theta.cuts = pareto_dominant_cuts
         Logging.@debug("-----------------")
+        prune_cuts_inner!(node.bellman_function.global_theta)
+        # cuts = node.bellman_function.global_theta.cuts
+        # pareto_dominant_cuts = SDDP.bnl!(cuts)
+        # # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
+        
+        # Logging.@debug("In stage $stage  #Cuts that need to be deleted: $(length(filter(cut -> !cut.pareto_dominant, cuts)))")
+        
+        # for dominated_cut in filter(cut -> !cut.pareto_dominant, cuts)
+        #     Logging.@debug("Cut that needs to be deleted: $dominated_cut")
+        #     if dominated_cut.constraint_ref !== nothing
+        #         JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
+        #         dominated_cut.constraint_ref = nothing
+        #         dominated_cut.non_dominated_count = 0
+        #     end
+        # end
+        # node.bellman_function.global_theta.cuts = pareto_dominant_cuts
     end
+end
+
+function prune_cuts!(::SDDP.MULTI_CUT, model::PolicyGraph{T}) where T
+    Logging.@debug("ich bin in prune cuts!!!!!!!!!!!")
+    Logging.@debug("-----------------")
+    for (stage, node) in model.nodes
+        for local_approx in node.bellman_function.local_thetas
+            prune_cuts_inner!(local_approx)
+            Logging.@debug("-----------------")
+        end
+    end
+end
+
+
+function prune_cuts_inner!(ValueFunction::ConvexApproximation)
+    pareto_dominant_cuts = SDDP.bnl!(ValueFunction.cuts)
+    # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
+
+    Logging.@debug("In stage $stage  #Cuts that need to be deleted: $(length(filter(cut -> !cut.pareto_dominant, ValueFunction.cuts)))")
+
+    for dominated_cut in filter(cut -> !cut.pareto_dominant, ValueFunction.cuts)
+        Logging.@debug("Cut that needs to be deleted: $dominated_cut")
+        if dominated_cut.constraint_ref !== nothing
+            JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
+            dominated_cut.constraint_ref = nothing
+            dominated_cut.non_dominated_count = 0
+        end
+    end
+    ValueFunction.cuts = pareto_dominant_cuts
 end

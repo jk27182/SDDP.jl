@@ -47,7 +47,8 @@ function master_loop(
 
         if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
             println("Conduct cut pruning")
-            prune_cuts!(model)
+            # Assumes every stage has the same cut type as the first stage!!
+            prune_cuts!(model[1].bellmnn_function.cut_type, model)
         end
 
         options.post_iteration_callback(result)
