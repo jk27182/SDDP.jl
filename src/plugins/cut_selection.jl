@@ -71,6 +71,7 @@ function _cut_selection_update(
         end
     end
     if length(V.cuts_to_be_deleted) >= V.deletion_minimum
+        # println("Cuts werden geloescht $(length(V.cuts_to_be_deleted))")
         for cut in V.cuts_to_be_deleted
             JuMP.delete(model, cut.constraint_ref)
             cut.constraint_ref = nothing
@@ -191,9 +192,10 @@ end
 # end
 
 function prune_cuts!(model::PolicyGraph{T}) where T
-    Logging.@debug("ich bin in prune cuts!!!!!!!!!!!")
-    Logging.@debug("-----------------")
-    # every node could have a different cut type
+    # Logging.@debug("ich bin in prune cuts!!!!!!!!!!!")
+    # Logging.@debug("-----------------")
+    println("Fuer den debugger")
+
     for (stage, node) in model.nodes
         cut_type = node.bellman_function.cut_type
 
@@ -202,33 +204,34 @@ function prune_cuts!(model::PolicyGraph{T}) where T
             for local_approx in node.bellman_function.local_thetas
                 prune_cuts_inner!(local_approx)
             end
-
         else
             # else assume Single Cuts
             global_approx = node.bellman_function.global_theta
             prune_cuts_inner!(global_approx)
         end
-
     end
-    Logging.@debug("-----------------")
+    # Logging.@debug("-----------------")
 end
 
 
 function prune_cuts_inner!(ValueFunctionApprox::ConvexApproximation)
-    println("start inner pruning")
-    pareto_dominant_cuts = SDDP.bnl!(ValueFunctionApprox.cuts)
-    # owner_model(model[1].bellman_function.global_theta.cuts[6].constraint_ref)
-
-    Logging.@debug("In stage $stage  #Cuts that need to be deleted: $(length(filter(cut -> !cut.pareto_dominant, ValueFunctionApprox.cuts)))")
-
-    for dominated_cut in filter(cut -> !cut.pareto_dominant, ValueFunctionApprox.cuts)
-        Logging.@debug("Cut that needs to be deleted: $dominated_cut")
+    # Cuts with Constraint ref of nothing are not in the model anymore
+    # Kommt nicht vor wenn die Selection Operationen passend ausgewählt werden
+    pareto_dominant_cuts = SDDP.bnl!(
+        filter(cut -> cut.constraint_ref !== nothing, ValueFunctionApprox.cuts)
+    )
+    cuts_to_delete = filter(cut -> !cut.pareto_dominant, ValueFunctionApprox.cuts)
+    if length(cuts_to_delete) > 0
+        println("a cut needs to be deleted")
+    end 
+    for dominated_cut in cuts_to_delete
+        # Logging.@debug("Cut that needs to be deleted: $dominated_cut")
         if dominated_cut.constraint_ref !== nothing
-            JuMP.delete(node.subproblem, dominated_cut.constraint_ref)
+            subproblem = JuMP.owner_model(ValueFunctionApprox.theta)
+            JuMP.delete(subproblem, dominated_cut.constraint_ref)
             dominated_cut.constraint_ref = nothing
             dominated_cut.non_dominated_count = 0
         end
     end
     ValueFunctionApprox.cuts = pareto_dominant_cuts
-    println("for logging after pruning")
 end

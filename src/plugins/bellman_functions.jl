@@ -213,6 +213,9 @@ obj_y::Union{Nothing,NTuple{N,Float64}},
     _dynamic_range_warning(θᵏ, πᵏ)
     cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
     _add_cut_constraint_to_model(V, cut)
+    if  !cut_selection
+        push!(V.cuts, cut)
+    end
     if cut_selection
         _cut_selection_update(
             V,
