@@ -7,6 +7,7 @@ mutable struct Settings
     debug_mode::Bool
     problem_name::String
     cut_type::Union{Enum, Nothing} 
+    custom_prefix::String
 
     # use a closure to store the settings and prevent public acces
     function Settings(;
@@ -18,6 +19,7 @@ mutable struct Settings
         debug_mode::Bool,
         problem_name::String="",
         cut_type::Union{Enum, Nothing}=nothing,
+        custom_prefix::String="",
     )
         settings = new(
             use_pareto_cut_logic,
@@ -28,6 +30,7 @@ mutable struct Settings
             debug_mode,
             problem_name,
             cut_type,
+            custom_prefix,
         )
         function set!(;
             use_pareto_cut_logic::Bool,
@@ -38,6 +41,7 @@ mutable struct Settings
             debug_mode::Bool,
             problem_name::String,
             cut_type::Enum,   
+            custom_prefix::String,
         )
             settings.use_pareto_cut_logic = use_pareto_cut_logic
             settings.log_level = log_level
@@ -47,6 +51,7 @@ mutable struct Settings
             settings.debug_mode = debug_mode
             settings.problem_name = problem_name
             settings.cut_type = cut_type    
+            settings.custom_prefix = custom_prefix
             return
         end
         set!(field::Symbol, value) = setfield!(settings, field, value)
@@ -64,7 +69,7 @@ mutable struct Settings
 
             id_str = pareto_str * cut_selection_str * pruning_str
             id_str = isempty(id_str) ? "DefaultSDDP" : id_str
-            return id_str * cut_str
+            return get(:custom_prefix) * id_str * cut_str
         end
 
         return (; set!, get, get_setting_id)
