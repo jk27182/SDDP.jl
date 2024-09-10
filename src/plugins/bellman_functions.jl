@@ -152,8 +152,6 @@ end
 #     obj_y::Union{Nothing,NTuple{N,Float64}},
 #     belief_y::Union{Nothing,Dict{T,Float64}};
 #     cut_selection::Bool = SETTINGS["use_cut_selection"],
-#     cut_buffering::Bool,
-#     stage::Int,
 # ) where {N,T}
 #     # key ist der State und x ist dann der Wert des States x^k
 #     for (key, x) in xᵏ
@@ -178,8 +176,6 @@ function _add_cut_pareto(
     obj_y::Union{Nothing,NTuple{N,Float64}},
     belief_y::Union{Nothing,Dict{T,Float64}};
     cut_selection::Bool = settings.get("use_cut_selection"),
-    cut_buffering::Bool,
-    stage::Int,
 ) where {N,T}
     # key ist der State und x ist dann der Wert des States x^k
     for (key, x) in xᵏ
@@ -204,8 +200,6 @@ function _add_cut_normal(
 obj_y::Union{Nothing,NTuple{N,Float64}},
     belief_y::Union{Nothing,Dict{T,Float64}};
     cut_selection::Bool = settings.get("use_cut_selection"),
-    cut_buffering::Bool,
-    stage::Int,
 ) where {N,T}
     for (key, x) in xᵏ
         θᵏ -= πᵏ[key] * x
@@ -235,8 +229,6 @@ function _add_cut(
     obj_y::Union{Nothing,NTuple{N,Float64}},
     belief_y::Union{Nothing,Dict{T,Float64}};
     cut_selection::Bool = settings.get("use_cut_selection"),
-    cut_buffering::Bool,
-    stage::Int,
 ) where {N,T}
     if settings.get("use_pareto_cut_logic")
         Logging.@debug "Using pareto cutting scheme"
@@ -248,8 +240,6 @@ function _add_cut(
             obj_y,
             belief_y;
             cut_selection,
-            cut_buffering,
-            stage,
         )
     else
         Logging.@debug "Using regular cutting scheme"
@@ -261,8 +251,6 @@ function _add_cut(
             obj_y,
             belief_y;
             cut_selection,
-            cut_buffering,
-            stage,
         )
 
     end
@@ -585,8 +573,6 @@ function _add_average_cut(
         outgoing_state,
         obj_y,
         belief_y;
-        cut_buffering = true,
-        stage=node.index,
     )
     return (
         theta = θᵏ,
@@ -619,8 +605,6 @@ function _add_multi_cut(
             node.objective_state === nothing ? nothing :
             node.objective_state.state,
             node.belief_state === nothing ? nothing : node.belief_state.belief;
-            cut_buffering = true,
-            stage=node.index
         )
     end
     model = JuMP.owner_model(bellman_function.global_theta.theta)
@@ -836,9 +820,7 @@ function read_cuts_from_file(
                 state,
                 nothing,
                 nothing;
-                cut_selection = has_state,
-                cut_buffering = true,
-                stage=node.index,
+                cut_selection = has_state
             )
         end
         # Loop through and add the multi-cuts. There are two parts:
@@ -868,8 +850,6 @@ function read_cuts_from_file(
                 nothing,
                 nothing;
                 cut_selection = has_state,
-                cut_buffering = true,
-                stage=node.index,
             )
         end
         # Here is part (ii): adding the constraints that define the risk-set

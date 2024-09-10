@@ -174,8 +174,6 @@ function slave_update(model::PolicyGraph, result::IterationResult)
                 cut.obj_y,
                 cut.belief_y;
                 cut_selection = settings.get("use_cut_selection"),
-                cut_buffering = true,
-                stage=node_index,
             )
         end
     end
