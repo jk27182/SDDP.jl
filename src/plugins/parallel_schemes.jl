@@ -57,7 +57,7 @@ function master_loop(
         if result.has_converged
             println("Print logs to file $(settings.get_setting_id()).json")
 
-            dirname = mkpath("data/results_tracking_bound_time/$(settings.get(:problem_name))")
+            dirname = mkpath("Benchmarks/results_tracking_bound_time/$(settings.get(:problem_name))")
             filename = "$(settings.get_setting_id()).json"
 
             open(joinpath(dirname, filename), "w") do file

@@ -194,7 +194,7 @@ end
 function prune_cuts!(model::PolicyGraph{T}) where T
     # Logging.@debug("ich bin in prune cuts!!!!!!!!!!!")
     # Logging.@debug("-----------------")
-    println("Fuer den debugger")
+    # println("Fuer den debugger")
 
     for (stage, node) in model.nodes
         cut_type = node.bellman_function.cut_type
@@ -221,9 +221,9 @@ function prune_cuts_inner!(ValueFunctionApprox::ConvexApproximation)
         filter(cut -> cut.constraint_ref !== nothing, ValueFunctionApprox.cuts)
     )
     cuts_to_delete = filter(cut -> !cut.pareto_dominant, ValueFunctionApprox.cuts)
-    if length(cuts_to_delete) > 0
-        println("a cut needs to be deleted")
-    end 
+    # if length(cuts_to_delete) > 0
+    #     # println("$(length(cuts_to_delete)) cut(s) need to be deleted")
+    # end 
     for dominated_cut in cuts_to_delete
         # Logging.@debug("Cut that needs to be deleted: $dominated_cut")
         if dominated_cut.constraint_ref !== nothing
