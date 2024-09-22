@@ -46,7 +46,7 @@ function master_loop(
         result = iteration(model, options)
 
         if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
-            println("Conduct cut pruning")
+            # println("Conduct cut pruning")
             # Assumes every stage has the same cut type as the first stage!!
             prune_cuts!(model)
         end
