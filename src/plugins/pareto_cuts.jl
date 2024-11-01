@@ -1,27 +1,27 @@
 import Plots, Colors
 
 
-function pareto_selection_update(V::ConvexApproximation, cut::Cut)
-    # check if cut dominates all other cuts
-    # for (key, coef) in cut.coefficients
-    #     dominates_part = coef >
-    # end
+# function pareto_selection_update(V::ConvexApproximation, cut::Cut)
+#     # check if cut dominates all other cuts
+#     # for (key, coef) in cut.coefficients
+#     #     dominates_part = coef >
+#     # end
 
-    for pareto_cut in V.cuts
-        intercept = pareto_cut.intercept
-        cut_coef_dominated = true
-        for (key, coef) in pareto_cut.coefficients
-            cut_coef_dominated = cut_coef_dominated && (cut.coefficients[key] <= coef)
-        end
-        cut_is_dominated = (cut.intercept <= intercept) && cut_coef_dominated 
-        if cut_is_dominated
-            return true
-        end
-    end
-    return false
-end
+#     for pareto_cut in V.cuts
+#         intercept = pareto_cut.intercept
+#         cut_coef_dominated = true
+#         for (key, coef) in pareto_cut.coefficients
+#             cut_coef_dominated = cut_coef_dominated && (cut.coefficients[key] <= coef)
+#         end
+#         cut_is_dominated = (cut.intercept <= intercept) && cut_coef_dominated 
+#         if cut_is_dominated
+#             return true
+#         end
+#     end
+#     return false
+# end
 
-function cut_is_dominated(V::ConvexApproximation, cut::Cut)
+function cut_is_dominated(V::ConvexApproximation, cut::Cut)::Bool
     for pareto_cut in V.cuts
         intercept = pareto_cut.intercept
         cut_coef_dominated = true
@@ -71,6 +71,45 @@ function first_cut_dominates(first_cut, second_cut)
     return first_cut_dominates
 end
 
+module Bskytree
+  import SDDP
+  using CxxWrap
+  @wrapmodule(
+    () -> joinpath("/Users/janik/Documents/Master/KIT/Masterarbeit/src/BSkyTreeJulia/build/lib/","libbskytree_$(SDDP.settings.get("num_dims"))d.dylib")
+  )
+  function __init__()
+    @initcxx()
+  end
+
+end # module
+
+"""
+    pareto_bskytree(data)
+
+Compute the Pareto front of the given data using the Bskytree algorithm.
+Computes only the indices of the elements of the pareto front.
+"""
+function pareto_bskytree(data::Array{SDDP.Cut})
+    # turn data into matrix
+    matrix = get_cut_point_matrix(data)
+    pareto_indices = Bskytree.compute_skyline(matrix)
+    return data[pareto_indices]
+end
+
+
+function get_cut_point_matrix(cuts::Array{SDDP.Cut})::Matrix
+    cut_coefs = values.(getfield.(cuts, :coefficients))
+    matrix = zeros(length(cuts), length(cut_coefs[1])+1)
+
+    for (row, coefs) in enumerate(cut_coefs)
+        for (col, coef) in enumerate(coefs)
+            matrix[row, col] = coef
+            matrix[row, end] = cuts[row].intercept
+        end
+    end
+    return matrix
+end
+
 
 """
     bnl!(data)
@@ -118,6 +157,33 @@ function bnl!(data::Array{SDDP.Cut})
     end
 
     return window
+end
+
+
+scale(x, max_val, min_val) = (x-min_val)/(max_val - min_val)
+"""
+Heursitically check if a point is dominated. That is checked by scaling the intercepts and coefficients of the array to 
+the interval [0, 1] and check if a point falls below the 75% lines for every dimension. The point is then considered to be
+dominated, as better points will typically lay in 
+"""
+function heuristic_point_is_dominated(cut::Cut, V::ConvexApproximation ; threshold::Float64)::Bool
+    # check intercept
+    scaled_intercept = scale(cut.intercept, V.max_cut_values["intercept"], V.min_cut_values["intercept"])
+    if scaled_intercept >= threshold
+        return false
+    end
+    # check coefs
+    for state in keys(V.states)
+        scaled_coef = scale(
+            cut.coefficients[state],
+            V.max_cut_values["coefs"][state],
+            V.min_cut_values["coefs"][state],
+        )
+        if scaled_coef >= threshold
+            return false
+        end
+    end
+    return true
 end
 
 

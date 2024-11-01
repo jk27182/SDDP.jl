@@ -8,6 +8,9 @@ mutable struct Settings
     problem_name::String
     cut_type::Union{Enum, Nothing} 
     custom_prefix::String
+    num_dims::Int
+    pruning_type::String
+    threshold::Float64
 
     # use a closure to store the settings and prevent public acces
     function Settings(;
@@ -20,6 +23,9 @@ mutable struct Settings
         problem_name::String="",
         cut_type::Union{Enum, Nothing}=nothing,
         custom_prefix::String="",
+        num_dims::Int=4,
+        pruning_type::String="bnl",
+        threshold=0.75
     )
         settings = new(
             use_pareto_cut_logic,
@@ -31,6 +37,9 @@ mutable struct Settings
             problem_name,
             cut_type,
             custom_prefix,
+            num_dims,
+            pruning_type,
+            threshold,
         )
         function set!(;
             use_pareto_cut_logic::Bool,
@@ -42,6 +51,9 @@ mutable struct Settings
             problem_name::String,
             cut_type::Enum,   
             custom_prefix::String,
+            num_dims::Int,
+            pruning_type::String,
+            threshold::Float64
         )
             settings.use_pareto_cut_logic = use_pareto_cut_logic
             settings.log_level = log_level
@@ -52,6 +64,9 @@ mutable struct Settings
             settings.problem_name = problem_name
             settings.cut_type = cut_type    
             settings.custom_prefix = custom_prefix
+            settings.num_dims = num_dims
+            settings.pruning_type = pruning_type
+            settings.threshold = threshold
             return
         end
         set!(field::Symbol, value) = setfield!(settings, field, value)
@@ -65,7 +80,7 @@ mutable struct Settings
             cut_str = get(:cut_type) == SINGLE_CUT ? "SingleCut_" : "MultiCut_"
             pareto_str = get(:use_pareto_cut_logic) ? "ParetoCuts_" : ""
             cut_selection_str = get(:use_cut_selection) ? "StandardCutSelection_" : ""
-            pruning_str = get(:use_pruning) ?  "Pruning$(get(:prune_interval))" : ""
+            pruning_str = get(:use_pruning) ?  "Pruning$(get(:pruning_type))_$(get(:prune_interval))_$(get(:threshold))" : ""
 
             id_str = pareto_str * cut_selection_str * pruning_str
             id_str = isempty(id_str) ? "DefaultSDDP" : id_str

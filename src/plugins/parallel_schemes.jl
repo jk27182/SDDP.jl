@@ -34,7 +34,7 @@ Base.show(io::IO, ::Serial) = print(io, "serial mode")
 
 interrupt(::Serial) = nothing
 
-
+nodes_per_iteration = Dict()
 function master_loop(
     ::Serial,
     model::PolicyGraph{T},
@@ -45,6 +45,10 @@ function master_loop(
     while true
         result = iteration(model, options)
 
+        # println("In Iteration $iteration_counter sampled states: ", model.nodes["1"].bellman_function.global_theta.sampled_states)
+        # nodes_per_iteration[iteration_counter] = deepcopy(model.nodes)
+
+        # println(iteration_counter)
         if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
             # println("Conduct cut pruning")
             # Assumes every stage has the same cut type as the first stage!!

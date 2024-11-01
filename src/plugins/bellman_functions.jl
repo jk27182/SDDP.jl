@@ -86,10 +86,10 @@ mutable struct ConvexApproximation
     sampled_states::Vector{SampledState}
     cuts_to_be_deleted::Vector{Cut}
     deletion_minimum::Int
-    current_max_cut_points::Vector{Float64}
+    # current_max_cut_points::Vector{Float64}
     # stage=>Dict(coef_i=>max_val_i)
-    max_cut_coefs::Dict
-    min_cut_coefs::Dict
+    min_cut_values::Union{Nothing,Dict}
+    max_cut_values::Union{Nothing,Dict}
 
     function ConvexApproximation(
         theta::JuMP.VariableRef,
@@ -98,6 +98,12 @@ mutable struct ConvexApproximation
         belief_states,
         deletion_minimum::Int,
     )
+        min_cut_values = Dict("intercept"=> Inf, "coefs"=> Dict())
+        max_cut_values = Dict("intercept"=> -Inf, "coefs"=> Dict())
+        for state in keys(states)
+            min_cut_values["coefs"][state] = Inf
+            max_cut_values["coefs"][state] = -Inf
+        end
         return new(
             theta,
             states,
@@ -107,7 +113,8 @@ mutable struct ConvexApproximation
             SampledState[],
             Cut[], #cuts to be deleted
             deletion_minimum,
-            Float64[],
+            min_cut_values,
+            max_cut_values,
         )
     end
 end
@@ -144,29 +151,6 @@ function _dynamic_range_warning(intercept, coefficients)
     return
 end
 
-# function _add_cut_pareto(
-#     V::ConvexApproximation,
-#     θᵏ::Float64, #intercept
-#     πᵏ::Dict{Symbol,Float64},
-#     xᵏ::Dict{Symbol,Float64}, #state
-#     obj_y::Union{Nothing,NTuple{N,Float64}},
-#     belief_y::Union{Nothing,Dict{T,Float64}};
-#     cut_selection::Bool = SETTINGS["use_cut_selection"],
-# ) where {N,T}
-#     # key ist der State und x ist dann der Wert des States x^k
-#     for (key, x) in xᵏ
-#         θᵏ -= πᵏ[key] * x
-#     end
-#     _dynamic_range_warning(θᵏ, πᵏ)
-#     cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
-#     cut_dominated = cut_is_dominated(V, cut)
-#     if !cut_dominated
-#         _add_cut_constraint_to_model(V, cut)
-#         push!(V.cuts, cut)
-#         # print(1)
-#     end
-#     return
-# end
 
 function _add_cut_pareto(
     V::ConvexApproximation,
@@ -183,11 +167,15 @@ function _add_cut_pareto(
     end
     _dynamic_range_warning(θᵏ, πᵏ)
     cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
+    sampled_state = SampledState(xᵏ, obj_y, belief_y, cut, NaN)
     cut_dominated = cut_is_dominated(V, cut)
     if !cut_dominated
+        if settings.get("pruning_type") == "pareto_heuristic"
+            update_min_max_coeffs!(V, cut)
+        end
         _add_cut_constraint_to_model(V, cut)
         push!(V.cuts, cut)
-        # print(1)
+        push!(V.sampled_states, sampled_state)
     end
     return
 end
@@ -207,9 +195,6 @@ obj_y::Union{Nothing,NTuple{N,Float64}},
     _dynamic_range_warning(θᵏ, πᵏ)
     cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
     _add_cut_constraint_to_model(V, cut)
-    if  !cut_selection
-        push!(V.cuts, cut)
-    end
     if cut_selection
         _cut_selection_update(
             V,
@@ -217,8 +202,23 @@ obj_y::Union{Nothing,NTuple{N,Float64}},
             xᵏ;
             # xᵏ,
         )
+    else
+        # cuts werden im cut selection update eh gepusht, brauche das aber für Cut pruning, wenn keine standard cut selection verwendet wird, V allerdings doch alle Cuts beinhalten sollte
+        push!(V.cuts, cut)
+    end
+    if settings.get("pruning_type") == "pareto_heuristic"
+        update_min_max_coeffs!(V, cut)
     end
     return
+end
+
+function update_min_max_coeffs!(ValueFunctionApprox::ConvexApproximation, cut::Cut)
+    ValueFunctionApprox.max_cut_values["intercept"] = max(cut.intercept, ValueFunctionApprox.max_cut_values["intercept"])
+    ValueFunctionApprox.min_cut_values["intercept"] = min(cut.intercept, ValueFunctionApprox.min_cut_values["intercept"])
+    for (state_symbol, new_coef) in cut.coefficients
+        ValueFunctionApprox.max_cut_values["coefs"][state_symbol] = max(new_coef, ValueFunctionApprox.max_cut_values["coefs"][state_symbol])
+        ValueFunctionApprox.min_cut_values["coefs"][state_symbol] = min(new_coef, ValueFunctionApprox.min_cut_values["coefs"][state_symbol])
+    end
 end
 
 function _add_cut(
