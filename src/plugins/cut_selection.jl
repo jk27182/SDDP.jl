@@ -169,8 +169,10 @@ end
 
 function prune_cuts!(model::PolicyGraph{T}) where T
     # prune_cuts_inner!(approx) = prune_cuts_inner_h!(approx)
-    # prune_cuts_inner!(approx) = settings.get("pruning_type") == "bnl" ? prune_cuts_inner_bnl!(approx) : prune_cuts_inner_h!(approx)
-    for (stage, node) in model.nodes
+    prune_cuts_inner!(approx) = settings.get("pruning_type") == "bnl" ? prune_cuts_inner_bnl!(approx) : prune_cuts_inner_h!(approx)
+    n_stages = length(model.nodes)
+    for stage in 1:(n_stages-1)
+        node = model.nodes[stage]
         cut_type = node.bellman_function.cut_type
         if cut_type == SDDP.MULTI_CUT
             # loops through all scenarios for the respective approximation
