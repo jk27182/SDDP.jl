@@ -170,12 +170,16 @@ function _add_cut_pareto(
     sampled_state = SampledState(xᵏ, obj_y, belief_y, cut, NaN)
     cut_dominated = cut_is_dominated(V, cut)
     if !cut_dominated
+        # println("cut is nicht dominiert")
         if settings.get("pruning_type") == "pareto_heuristic"
             update_min_max_coeffs!(V, cut)
         end
         _add_cut_constraint_to_model(V, cut)
         push!(V.cuts, cut)
         push!(V.sampled_states, sampled_state)
+    else
+        # println("nach pareto cut heuristic wurde der Cut NICHT eingeführt")
+        SDDP.denied_cut_counter +=1
     end
     return
 end

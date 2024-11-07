@@ -132,14 +132,14 @@ function bnl!(data::Array{SDDP.Cut})
     end
 
     window = [data[1]]
-    for cut in data[2:end]
+    for i in 1:length(data)
+        cut = data[i]
         dominated = false
         for (i, window_cut) in enumerate(window)
             # check if a window cut dominates the new cut, if so discard cut
             if first_cut_dominates(window_cut, cut)
                 dominated = true
                 break
-
             # check if the new cut dominates a the window cut, if so delete window cut
             # otherwise cut can be added to window (aka. block)
             elseif first_cut_dominates(cut, window_cut)

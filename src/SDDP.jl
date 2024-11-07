@@ -36,6 +36,8 @@ const settings = Settings(
     prune_interval = 10, 
     debug_mode=false,
 )
+denied_cut_counter = 0
+cut_deletion_standard_per_stage = Dict(stage=> 0 for stage in 1:120)
 logger = Logging.ConsoleLogger(stdout, settings.get("log_level"))
 Logging.global_logger(logger)
 
