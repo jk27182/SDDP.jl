@@ -171,9 +171,7 @@ function _add_cut_pareto(
     cut_dominated = cut_is_dominated(V, cut)
     if !cut_dominated
         # println("cut is nicht dominiert")
-        if settings.get("pruning_type") == "pareto_heuristic"
-            update_min_max_coeffs!(V, cut)
-        end
+        update_min_max_coeffs!(V, cut)
         _add_cut_constraint_to_model(V, cut)
         push!(V.cuts, cut)
         push!(V.sampled_states, sampled_state)
@@ -210,9 +208,7 @@ obj_y::Union{Nothing,NTuple{N,Float64}},
         # cuts werden im cut selection update eh gepusht, brauche das aber für Cut pruning, wenn keine standard cut selection verwendet wird, V allerdings doch alle Cuts beinhalten sollte
         push!(V.cuts, cut)
     end
-    if settings.get("pruning_type") == "pareto_heuristic"
-        update_min_max_coeffs!(V, cut)
-    end
+    update_min_max_coeffs!(V, cut)
     return
 end
 
