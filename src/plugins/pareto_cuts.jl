@@ -61,14 +61,37 @@ function pareto_frontier!(cuts::Array{Cut})
     end
 end
 
-function first_cut_dominates(first_cut, second_cut)
-    first_cut_coefs = values(first_cut.coefficients)
-    second_cut_coefs = values(second_cut.coefficients)
-    # es wird angenommen das bei gleichen Koeffizienten der aktuellere Cut verwendet wird, da man sonst den gleichen Cut mehrmals im Problem hätte
-    first_coef_dominates = all(first_cut_coefs .>= second_cut_coefs)
+function first_cut_dominates(first_cut, second_cut, ValueFunctionApprox)
+    cur_min_intercept = ValueFunctionApprox.min_cut_values["intercept"]
+    cur_max_intercept = ValueFunctionApprox.max_cut_values["intercept"]
+    cur_min_coefs = ValueFunctionApprox.min_cut_values["coefs"]
+    cur_max_coefs = ValueFunctionApprox.max_cut_values["coefs"]
 
-    first_cut_dominates = first_cut.intercept >= second_cut.intercept && first_coef_dominates
-    return first_cut_dominates
+    # es wird angenommen das bei gleichen Koeffizienten der aktuellere Cut verwendet wird, da man sonst den gleichen Cut mehrmals im Problem hätte
+    for state in keys(first_cut.coefficients)
+        scaled_first_cut_coef = scale(first_cut.coefficients[state], cur_max_coefs[state], cur_min_coefs[state])
+        scaled_second_cut_coef = scale(second_cut.coefficients[state], cur_max_coefs[state], cur_min_coefs[state])
+
+        if ! (((1 + settings.get("epsilon")) * scaled_first_cut_coef) >= scaled_second_cut_coef)
+            # first cut does not dominate in all dimensions break for loop
+            return false
+        end
+    end
+    scaled_first_intercept = scale(first_cut.intercept, cur_max_intercept, cur_min_intercept) 
+    scaled_second_intercept = scale(second_cut.intercept, cur_max_intercept, cur_min_intercept) 
+
+    first_intercept_dominates = (1 + settings.get("epsilon"))*scaled_first_intercept >= scaled_second_intercept
+    return first_intercept_dominates
+
+    # frühere Version
+    # first_cut_coefs = values(first_cut.coefficients)
+    # second_cut_coefs = values(second_cut.coefficients)
+    # first_coef_dominates = all(
+    #     ((1 + settings.get("epsilon")) .* first_cut_coefs) .>= second_cut_coefs
+    # )
+
+    # first_cut_dominates =  (1 + settings.get("epsilon"))*first_cut.intercept >= second_cut.intercept && first_coef_dominates
+    # return first_cut_dominates
 end
 
 module Bskytree
@@ -91,11 +114,32 @@ Computes only the indices of the elements of the pareto front.
 """
 function pareto_bskytree(data::Array{SDDP.Cut})
     # turn data into matrix
-    matrix = get_cut_point_matrix(data)
-    pareto_indices = Bskytree.compute_skyline(matrix)
-    return data[pareto_indices]
+    @time matrix = get_cut_point_matrix(data)
+    # println("matrix")
+    # println(matrix)
+    @time pareto_indices = Bskytree.compute_skyline(matrix)
+    # println(pareto_indices)
+    # println("\\\\\\\\\\\\\\\\\\\\\\")
+    return pareto_indices
 end
 
+
+# using Base.Threads
+# function get_cut_point_matrix(cuts::Array{SDDP.Cut})::Matrix
+#     # Extract intercepts and coefficients directly
+#     n_cuts = length(cuts)
+#     n_coeffs = length(first(cuts).coefficients)
+#     matrix = zeros(n_cuts, n_coeffs + 1)
+
+#     @threads for i in 1:n_cuts
+#         matrix[i, 1:n_coeffs] .= collect(values(cuts[i].coefficients))
+#         matrix[i, end] = cuts[i].intercept
+#     end
+
+#     return matrix
+
+#     return matrix
+# end
 
 function get_cut_point_matrix(cuts::Array{SDDP.Cut})::Matrix
     cut_coefs = values.(getfield.(cuts, :coefficients))
@@ -123,26 +167,25 @@ Compute the Pareto front of the given data using the Block Nested Loop (BNL) alg
 An array of cuts representing the Pareto front.
 
 """
-function bnl!(data::Array{SDDP.Cut})
-    if isempty(data)
-        return data
-    elseif length(data) == 1
-        data[1].pareto_dominant = true
-        return data
+function bnl!(ValueFunctionApprox::ConvexApproximation)
+    cut_array = filter(cut -> cut.constraint_ref !== nothing, ValueFunctionApprox.cuts)
+    if isempty(cut_array)
+        return cut_array
+    elseif length(cut_array) == 1
+        cut_array[1].pareto_dominant = true
+        return cut_array
     end
-
-    window = [data[1]]
-    for i in 1:length(data)
-        cut = data[i]
+    window = [cut_array[1]]
+    for cut in cut_array
         dominated = false
         for (i, window_cut) in enumerate(window)
             # check if a window cut dominates the new cut, if so discard cut
-            if first_cut_dominates(window_cut, cut)
+            if first_cut_dominates(window_cut, cut, ValueFunctionApprox)
                 dominated = true
                 break
             # check if the new cut dominates a the window cut, if so delete window cut
             # otherwise cut can be added to window (aka. block)
-            elseif first_cut_dominates(cut, window_cut)
+            elseif first_cut_dominates(window_cut, cut, ValueFunctionApprox)
                 deleteat!(window, i)
             end
         end
@@ -152,10 +195,16 @@ function bnl!(data::Array{SDDP.Cut})
         end
     end
 
+    # UPDATE MIN UND MAX VALUES!!!!!!!!    
     for cut in window
         cut.pareto_dominant = true
+        for state in keys(cut.coefficients)
+            ValueFunctionApprox.min_cut_values["coefs"][state] = min(cut.coefficients[state], ValueFunctionApprox.min_cut_values["coefs"][state])
+            ValueFunctionApprox.max_cut_values["coefs"][state] = max(cut.coefficients[state], ValueFunctionApprox.max_cut_values["coefs"][state])
+        end
+        ValueFunctionApprox.min_cut_values["intercept"] = min(cut.intercept, ValueFunctionApprox.min_cut_values["intercept"])
+        ValueFunctionApprox.max_cut_values["intercept"] = max(cut.intercept, ValueFunctionApprox.max_cut_values["intercept"])
     end
-
     return window
 end
 

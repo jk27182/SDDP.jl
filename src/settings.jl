@@ -11,6 +11,7 @@ mutable struct Settings
     num_dims::Int
     pruning_type::String
     threshold::Float64
+    epsilon::Float64
 
     # use a closure to store the settings and prevent public acces
     function Settings(;
@@ -25,7 +26,8 @@ mutable struct Settings
         custom_prefix::String="",
         num_dims::Int=4,
         pruning_type::String="bnl",
-        threshold=0.75
+        threshold=0.75,
+        epsilon=0.1
     )
         settings = new(
             use_pareto_cut_logic,
@@ -40,6 +42,7 @@ mutable struct Settings
             num_dims,
             pruning_type,
             threshold,
+            epsilon,
         )
         function set!(;
             use_pareto_cut_logic::Bool,
@@ -53,7 +56,8 @@ mutable struct Settings
             custom_prefix::String,
             num_dims::Int,
             pruning_type::String,
-            threshold::Float64
+            threshold::Float64,
+            epsilon::Float64
         )
             settings.use_pareto_cut_logic = use_pareto_cut_logic
             settings.log_level = log_level
@@ -67,6 +71,7 @@ mutable struct Settings
             settings.num_dims = num_dims
             settings.pruning_type = pruning_type
             settings.threshold = threshold
+            settings.epsilon = epsilon
             return
         end
         set!(field::Symbol, value) = setfield!(settings, field, value)
@@ -80,7 +85,7 @@ mutable struct Settings
             cut_str = get(:cut_type) == SINGLE_CUT ? "SingleCut_" : "MultiCut_"
             pareto_str = get(:use_pareto_cut_logic) ? "ParetoCuts_" : ""
             cut_selection_str = get(:use_cut_selection) ? "StandardCutSelection_" : ""
-            pruning_str = get(:use_pruning) ?  "Pruning$(get(:pruning_type))_$(get(:prune_interval))_$(get(:threshold))" : ""
+            pruning_str = get(:use_pruning) ?  "Pruning$(get(:pruning_type))_Epsilon$(get(:epsilon))_Inverval$(get(:prune_interval))_$(get(:threshold))" : ""
 
             id_str = pareto_str * cut_selection_str * pruning_str
             id_str = isempty(id_str) ? "DefaultSDDP" : id_str
