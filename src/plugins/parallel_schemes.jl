@@ -42,6 +42,7 @@ function master_loop(
 ) where {T}
     _initialize_solver(model; throw_error = false)
     iteration_counter = 1
+    deleted_cuts_per_stage_iterations = Dict()
     while true
         result = iteration(model, options)
 
@@ -52,7 +53,12 @@ function master_loop(
         if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
             # println("Conduct cut pruning")
             # Assumes every stage has the same cut type as the first stage!!
-            prune_cuts!(model)
+            n_deleted_cuts_per_stage = prune_cuts!(model)
+            deleted_cuts_per_stage_iterations["stage_$(iteration_counter)"] = n_deleted_cuts_per_stage
+            # println(n_deleted_cuts_per_stage["1"])
+            # println(sum(values(n_deleted_cuts_per_stage)))
+            # a = []
+            # a[1]
         end
 
         options.post_iteration_callback(result)
@@ -66,6 +72,10 @@ function master_loop(
 
             open(joinpath(dirname, filename), "w") do file
                 JSON.print(file, options.log)
+            end
+            filename_deleted_cuts = "deleted_cuts_per_stage_epsilon$(settings.get("epsilon")).json"
+            open(joinpath(dirname, filename_deleted_cuts), "w") do file
+                JSON.print(file, deleted_cuts_per_stage_iterations)
             end
 
             return result.status

@@ -167,11 +167,17 @@ end
 #     end
 # end
 
-
-
 function prune_cuts!(model::PolicyGraph{T}) where T
-    # prune_cuts_inner!(approx) = prune_cuts_inner_h!(approx)
-    pruning_type = settings.get("pruning_type") 
+    stage, node  = first(model.nodes)
+    cut_type = node.bellman_function.cut_type
+    if cut_type == SDDP.MULTI_CUT
+        prune_cuts_multi_cut!(model)
+    elseif cut_type == SDDP.SINGLE_CUT
+        prune_cuts_single_cut!(model)
+    end
+end
+
+function get_pruning_algorithm(pruning_type)
     if pruning_type == "bnl"
         prune_cuts_inner! = prune_cuts_inner_bnl!
     elseif pruning_type == "Bskytree"
@@ -180,26 +186,48 @@ function prune_cuts!(model::PolicyGraph{T}) where T
         prune_cuts_inner! = prune_cuts_inner_heuristic!
     end
 
+    return prune_cuts_inner!
+end
+
+function prune_cuts_single_cut!(model::PolicyGraph{T}) where T
+    # prune_cuts_inner!(approx) = prune_cuts_inner_h!(approx)
+    pruning_type = settings.get("pruning_type") 
+    prune_cuts_inner! = get_pruning_algorithm(pruning_type)
+
     n_stages = length(model.nodes)
+    deleted_cuts_per_stage = Dict()
     for (stage, node) in model.nodes
-        if stage == n_stages || stage  == string(2)
+        if stage == n_stages #|| stage  == string(2)
             continue
         end
-        node = model.nodes[stage]
-        cut_type = node.bellman_function.cut_type
-        if cut_type == SDDP.MULTI_CUT
-            # loops through all scenarios for the respective approximation
-            for local_approx in node.bellman_function.local_thetas
-                prune_cuts_inner!(local_approx)
-            end
-        else
-            # else assume Single Cuts
-            global_approx = node.bellman_function.global_theta
-            prune_cuts_inner!(global_approx)
-            # prune_cuts_inner_h!(global_approx)
-        end
+        global_approx = node.bellman_function.global_theta
+        recalc_min_max_cut_values!(global_approx)
+        n_deleted_cuts = prune_cuts_inner!(global_approx)
+        deleted_cuts_per_stage[stage] = n_deleted_cuts
     end
-    # Logging.@debug("-----------------")
+    return deleted_cuts_per_stage
+end
+
+function prune_cuts_multi_cut!(model::PolicyGraph{T}) where T
+    # prune_cuts_inner!(approx) = prune_cuts_inner_h!(approx)
+    pruning_type = settings.get("pruning_type") 
+    prune_cuts_inner! = get_pruning_algorithm(pruning_type)
+
+    n_stages = length(model.nodes)
+    deleted_cuts_per_stage = Dict()
+    for (stage, node) in model.nodes
+        if stage == n_stages #|| stage  == string(2)
+            continue
+        end
+        # loops through all scenarios for the respective approximation
+        n_deleted_cuts_trial = 0
+        for local_approx in node.bellman_function.local_thetas
+            recalc_min_max_cut_values!(local_approx)
+            n_deleted_cuts_trial += prune_cuts_inner!(local_approx)
+        end
+        deleted_cuts_per_stage[stage] = n_deleted_cuts_trial
+    end
+    return deleted_cuts_per_stage
 end
 
 
@@ -230,7 +258,7 @@ function prune_cuts_inner_bskytree!(ValueFunctionApprox::ConvexApproximation)
         end
     end
     @time deleteat!(ValueFunctionApprox.cuts, deletion_idxs)
-
+    return length(deletion_idxs.cuts)
     # for p_idx in pareto_indices
     #     ValueFunctionApprox.cuts[p_idx].pareto_dominant = true
     # end
@@ -252,41 +280,49 @@ end
 function prune_cuts_inner_bnl!(ValueFunctionApprox::ConvexApproximation)
     # Cuts with Constraint ref of nothing are not in the model anymore
     # Kommt nicht vor wenn die Selection Operationen passend ausgewählt werden
-    println("RUNNING BNL")
-    pareto_dominant_cuts = SDDP.bnl!(
-        ValueFunctionApprox,
-    )
-
-    # if length(cuts_to_delete) > 0
-    #     # println("$(length(cuts_to_delete)) cut(s) need to be deleted")
-    # end 
-    println(repeat("=", 10))
-    # println("# cuts", length(ValueFunctionApprox.cuts))
-    # println("# pareto dominant cuts", length(pareto_dominant_cuts))
-    # for cut in ValueFunctionApprox.cuts
-    #     println(cut.constraint_ref)
-    # end
-    # println(repeat("=", 10), "Pareto Dominant Cuts")
-    # for cut in pareto_dominant_cuts
-    #     println(cut.constraint_ref)
-    # end
-    # println(repeat("=", 10))
-    println("start deleting stuff")
-    for (idx, cut) in enumerate(ValueFunctionApprox.cuts)
-        # Logging.@debug("Cut that needs to be deleted: $dominated_cut")
-        if cut.pareto_dominant == false
-            println("delete cut")
-            println(cut.constraint_ref)
-            subproblem = JuMP.owner_model(ValueFunctionApprox.theta)
-            JuMP.delete(subproblem, cut.constraint_ref)
-            # remove_at_idx_unordered!(ValueFunctionApprox.cuts, idx)
-            cut.constraint_ref = nothing
-            cut.non_dominated_count = 0
+    # println("RUNNING BNL")
+    for cut in ValueFunctionApprox.cuts
+        if cut.constraint_ref === nothing
+            println("!@@@@@@@@@@@@@@@@@@@@@@@")
+            println("nothing cut gefunden")
+            println(ValueFunctionApprox.cuts)
+            break
         end
     end
-    println("end deleting stuff")
-    println(repeat("=", 10))
-    ValueFunctionApprox.cuts = pareto_dominant_cuts
+    pareto_dominant_cuts = SDDP.bnl!(
+        ValueFunctionApprox
+    )
+    subproblem = JuMP.owner_model(ValueFunctionApprox.theta)
+    dominant_cut_idxs = []
+    for (idx, cut) in enumerate(ValueFunctionApprox.cuts)
+        if cut.pareto_dominant == false
+            println("delete cut")
+            # println(cut.constraint_ref)
+            JuMP.delete(subproblem, cut.constraint_ref)
+            cut.constraint_ref = nothing
+            cut.non_dominated_count = 0
+        else
+            push!(dominant_cut_idxs, idx)
+        end
+    end
+    # ValueFunctionApprox.cuts = filter(cut-> cut.pareto_dominant == true, ValueFunctionApprox.cuts)
+    n_cuts_prev = length(ValueFunctionApprox.cuts)
+    println("Deleted Cuts in outer",length(ValueFunctionApprox.cuts) - length(pareto_dominant_cuts), " individual lenght $(length(ValueFunctionApprox.cuts)), $(length(pareto_dominant_cuts)))")
+    ValueFunctionApprox.cuts = ValueFunctionApprox.cuts[dominant_cut_idxs]
+    n_deleted_cuts = n_cuts_prev - length(ValueFunctionApprox.cuts) #- length(pareto_dominant_cuts)
+
+    if length(ValueFunctionApprox.cuts) != length(pareto_dominant_cuts)
+        println(repeat("|",5))
+        println("VFA")
+        for cut in ValueFunctionApprox.cuts
+            println(cut.constraint_ref)
+        end
+        println("Pareto Cuts")
+        for cut in pareto_dominant_cuts
+            println(cut.constraint_ref)
+        end
+    end
+    return n_deleted_cuts
 end
 
 function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
@@ -295,58 +331,65 @@ function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
     cur_min_coefs = ValueFunctionApprox.min_cut_values["coefs"]
     cur_max_coefs = ValueFunctionApprox.max_cut_values["coefs"]
 
-    # cur_min_coefs = Dict()
-    # cur_max_coefs = Dict()
-    # for state in keys(ValueFunctionApprox.states)
-    #     cur_min_coefs[state] = Inf
-    #     cur_max_coefs[state] = -Inf
-    # end
+    cur_min_intercept_trial = Inf
+    cur_max_intercept_trial = -Inf
+    cur_min_coefs_trial = Dict()
+    cur_max_coefs_trial = Dict()
+    for state in keys(ValueFunctionApprox.states)
+        cur_min_coefs_trial[state] = Inf
+        cur_max_coefs_trial[state] = -Inf
+    end
     # cur_max_intercept = -Inf
     # cur_min_intercept = Inf
+    pareto_dom_cuts = []
     for cut in ValueFunctionApprox.cuts
         # sollte min und max vals nach jeder iteration angepasst werden?
         # mache es bewusst erstmal nicht
         # muss nochmal drüber nachdenken, ob sonst zu viele Punkte gelöscht werden
         # ist das überhaupt möglich?
-        if cut.constraint_ref !== nothing
-            is_dominated = SDDP.heuristic_point_is_dominated(
-                cut,
-                ValueFunctionApprox,
-                threshold=settings.get("threshold"),
-            )
-            if is_dominated
-                # println("delete cut")
-                # print("point is dominated")
-                # is_dominated = SDDP.heuristic_point_is_dominated(
-                #     cut,
-                #     ValueFunctionApprox,
-                #     threshold=settings.get("threshold"),
-                # )
-                cut.pareto_dominant = false
-                # if cut is deleted, minimum and maximum need to be updated
-                subproblem = JuMP.owner_model(ValueFunctionApprox.theta)
-                JuMP.delete(subproblem, cut.constraint_ref)
-                cut.constraint_ref = nothing
-                cut.non_dominated_count = 0
-            else
-                # ist falsch denke ich, so wird das nicht funktionieren
-
-            
-                # if cut is not dominated, hence not removed, check if cut is new min or max for subsequent pruning steps
-                cur_min_intercept = min(cut.intercept, cur_min_intercept)
-                cur_max_intercept = max(cut.intercept, cur_max_intercept)
-                for state in keys(ValueFunctionApprox.states)
-                    cur_min_coefs[state] = min(cut.coefficients[state], cur_min_coefs[state])
-                    cur_max_coefs[state] = max(cut.coefficients[state], cur_max_coefs[state])
-                end
+        is_dominated = SDDP.heuristic_point_is_dominated(
+            cut,
+            ValueFunctionApprox,
+            threshold=settings.get("threshold"),
+        )
+        if is_dominated
+            # println("delete cut")
+            # print("point is dominated")
+            # is_dominated = SDDP.heuristic_point_is_dominated(
+            #     cut,
+            #     ValueFunctionApprox,
+            #     threshold=settings.get("threshold"),
+            # )
+            cut.pareto_dominant = false
+            # if cut is deleted, minimum and maximum need to be updated
+            subproblem = JuMP.owner_model(ValueFunctionApprox.theta)
+            JuMP.delete(subproblem, cut.constraint_ref)
+            cut.constraint_ref = nothing
+            cut.non_dominated_count = 0
+            # ist falsch denke ich, so wird das nicht funktionieren
+        else
+            push!(pareto_dom_cuts)
+            cur_max_intercept_trial = max(cut.intercept, cur_max_intercept)
+            cur_min_intercept_trial = min(cut.intercept, cur_min_intercept)
+            for state in keys(ValueFunctionApprox.states)
+                cur_min_coefs_trial[state] = min(cut.coefficients[state], cur_min_coefs[state])
+                cur_max_coefs_trial[state] = max(cut.coefficients[state], cur_max_coefs[state])
             end
         end
     end
     # cut_matrix = SDDP.get_cut_point_matrix(filter(cut-> cut.constraint_ref !== nothing, ValueFunctionApprox.cuts))
     # ValueFunctionApprox.min_cut_values = minimum(cut_matrix, dim=1)
     # ValueFunctionApprox.max_cut_values = maximum(cut_matrix, dim=1)
-    ValueFunctionApprox.min_cut_values["intercept"] = cur_min_intercept
-    ValueFunctionApprox.max_cut_values["intercept"] = cur_max_intercept
-    ValueFunctionApprox.min_cut_values["coefs"] = cur_min_coefs
-    ValueFunctionApprox.max_cut_values["coefs"] = cur_max_coefs
+    
+    # if cut is not dominated, hence not removed, check if cut is new min or max for subsequent pruning steps
+    old_approx_length = length(ValueFunctionApprox.cuts)
+    # ValueFunctionApprox.cuts = filter(cut-> cut.pareto_dominant, ValueFunctionApprox.cuts)
+    ValueFunctionApprox.cuts = pareto_dom_cuts
+    ValueFunctionApprox.min_cut_values["intercept"] = cur_min_intercept_trial
+    ValueFunctionApprox.max_cut_values["intercept"] = cur_max_intercept_trial
+    ValueFunctionApprox.min_cut_values["coefs"] = cur_min_coefs_trial
+    ValueFunctionApprox.max_cut_values["coefs"] = cur_max_coefs_trial
+    
+    n_deleted_cuts = length(ValueFunctionApprox.cuts) - old_approx_length
+    return n_deleted_cuts
 end
