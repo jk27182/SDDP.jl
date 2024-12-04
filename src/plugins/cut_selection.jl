@@ -195,9 +195,14 @@ function prune_cuts_single_cut!(model::PolicyGraph{T}) where T
     prune_cuts_inner! = get_pruning_algorithm(pruning_type)
 
     n_stages = length(model.nodes)
+    if haskey(model.nodes, "0") || haskey(model.nodes,0)
+        # for 0-based indexed models adjust last stage
+        n_stages-=1
+    end
     deleted_cuts_per_stage = Dict()
     for (stage, node) in model.nodes
-        if stage == n_stages #|| stage  == string(2)
+        # skip last stage as there is no value function for next stages
+        if stage == n_stages || stage  == "$(n_stages)"
             continue
         end
         global_approx = node.bellman_function.global_theta
