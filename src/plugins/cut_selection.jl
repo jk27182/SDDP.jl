@@ -206,8 +206,9 @@ function prune_cuts_single_cut!(model::PolicyGraph{T}) where T
             continue
         end
         global_approx = node.bellman_function.global_theta
-        recalc_min_max_cut_values!(global_approx)
         n_deleted_cuts = prune_cuts_inner!(global_approx)
+        # recalc after, since coeffs are updated with every additional cut
+        recalc_min_max_cut_values!(global_approx)
         deleted_cuts_per_stage[stage] = n_deleted_cuts
     end
     return deleted_cuts_per_stage
@@ -227,8 +228,8 @@ function prune_cuts_multi_cut!(model::PolicyGraph{T}) where T
         # loops through all scenarios for the respective approximation
         n_deleted_cuts_trial = 0
         for local_approx in node.bellman_function.local_thetas
-            recalc_min_max_cut_values!(local_approx)
             n_deleted_cuts_trial += prune_cuts_inner!(local_approx)
+            recalc_min_max_cut_values!(local_approx)
         end
         deleted_cuts_per_stage[stage] = n_deleted_cuts_trial
     end
