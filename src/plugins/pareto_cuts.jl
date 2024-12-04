@@ -21,18 +21,84 @@ import Plots, Colors
 #     return false
 # end
 
-function cut_is_dominated(V::ConvexApproximation, cut::Cut)::Bool
-    for pareto_cut in V.cuts
-        intercept = pareto_cut.intercept
+
+function pareto_cut_double_pass(V::ConvexApproximation, cut::Cut)
+    recalc_min_max_cut_values!(V)
+    new_cut_intercept_scaled = scale(
+        cut.intercept,
+        V.max_cut_values["intercept"],
+        V.min_cut_values["intercept"],
+    )
+    new_cut_coef_scaled = Dict(
+        state=> scale(coef, V.max_cut_values["coefs"][state], V.max_cut_values["coefs"][state])
+        for state in keys(cut.coefficients)
+    )
+    idx_cur_used_but_dom_cuts = []
+    for (idx, pareto_cut) in enumerate(V.cuts)
+        scaled_intercept = scale(
+            pareto_cut.intercept,
+            V.max_cut_values["intercept"],
+            V.min_cut_values["intercept"],
+        )
         cut_coef_dominated = true
-        for (key, coef) in pareto_cut.coefficients
-            cut_coef_dominated = cut_coef_dominated && (cut.coefficients[key] <= coef)
+        for (state, coef_scaled) in new_cut_coef_scaled
+            cur_used_cut_coef_scaled = scale(
+                pareto_cut.coefficients[state],V.max_cut_values["coefs"][state], V.max_cut_values["coefs"][state]
+            )
+            # check if even when scaled with epsilon, is new cut coef dominated
+            new_cut_coef_dominated = ((1+settings.get("epsilon"))*coef_scaled < cur_used_cut_coef_scaled)
+            cut_coef_dominated = cut_coef_dominated && new_cut_coef_dominated
         end
-        cut_is_dominated = (cut.intercept <= intercept) && cut_coef_dominated 
+        cut_is_dominated = ((1 + settings.get("epsilon"))*new_cut_intercept_scaled < scaled_intercept) && cut_coef_dominated 
+        if cut_is_dominated
+            return true
+        else
+            push!(idx_cur_used_but_dom_cuts, idx)
+        end
+    end
+    cut.pareto_dominant = true
+    subproblem = JuMP.owner_model(V.theta)
+    for dominated_idx in idx_cur_used_but_dom_cuts
+        dominated_cut = V.cuts[dominated_idx]
+        JuMP.delete(subproblem, dominated_cut.constraint_ref)
+        cut.constraint_ref = nothing
+        cut.non_dominated_count = 0
+    end
+    return false
+end
+
+
+function cut_is_dominated(V::ConvexApproximation, cut::Cut)::Bool
+    new_cut_intercept_scaled = scale(
+        cut.intercept,
+        V.max_cut_values["intercept"],
+        V.min_cut_values["intercept"],
+    )
+    new_cut_coef_scaled = Dict(
+        state=> scale(coef, V.max_cut_values["coefs"][state], V.max_cut_values["coefs"][state])
+        for state in keys(cut.coefficients)
+    )
+    for pareto_cut in V.cuts
+        scaled_intercept = scale(
+            pareto_cut.intercept,
+            V.max_cut_values["intercept"],
+            V.min_cut_values["intercept"],
+        )
+        cut_coef_dominated = true
+        for (state, coef_scaled) in new_cut_coef_scaled
+            cur_used_cut_coef_scaled = scale(
+                pareto_cut.coefficients[state],V.max_cut_values["coefs"][state], V.max_cut_values["coefs"][state]
+            )
+            # check if even when scaled with epsilon, is new cut coef dominated
+            new_cut_coef_dominated = ((1+settings.get("epsilon"))*coef_scaled < cur_used_cut_coef_scaled)
+            cut_coef_dominated = cut_coef_dominated && new_cut_coef_dominated
+        end
+        cut_is_dominated = ((1 + settings.get("epsilon"))*new_cut_intercept_scaled < scaled_intercept) && cut_coef_dominated 
         if cut_is_dominated
             return true
         end
     end
+    cut.pareto_dominant = true
     return false
 end
 
@@ -71,7 +137,8 @@ function first_cut_dominates(first_cut, second_cut, ValueFunctionApprox)
     for state in keys(first_cut.coefficients)
         scaled_first_cut_coef = scale(first_cut.coefficients[state], cur_max_coefs[state], cur_min_coefs[state])
         scaled_second_cut_coef = scale(second_cut.coefficients[state], cur_max_coefs[state], cur_min_coefs[state])
-
+        # println("epsilon $(settings.get("epsilon"))","First cut",first_cut.coefficients[state], " scaled ", scaled_first_cut_coef, " second cut", second_cut.coefficients[state], " ",  scaled_second_cut_coef)
+        # println("dominance relation ",  (((1 + settings.get("epsilon")) * scaled_first_cut_coef) >= scaled_second_cut_coef))
         if ! (((1 + settings.get("epsilon")) * scaled_first_cut_coef) >= scaled_second_cut_coef)
             # first cut does not dominate in all dimensions break for loop
             return false
@@ -208,18 +275,41 @@ function bnl!(ValueFunctionApprox::ConvexApproximation)
         end
     end
 
-    # UPDATE MIN UND MAX VALUES!!!!!!!!    
+    println("Deleted Cuts in bnl ",length(ValueFunctionApprox.cuts) - length(window), " individual length $(length(ValueFunctionApprox.cuts)), $(length(window))")
     for cut in window
-        cut.pareto_dominant = true
-        for state in keys(cut.coefficients)
-            ValueFunctionApprox.min_cut_values["coefs"][state] = min(cut.coefficients[state], ValueFunctionApprox.min_cut_values["coefs"][state])
-            ValueFunctionApprox.max_cut_values["coefs"][state] = max(cut.coefficients[state], ValueFunctionApprox.max_cut_values["coefs"][state])
+        if !cut.pareto_dominant
+            println("not dominant")
         end
-        ValueFunctionApprox.min_cut_values["intercept"] = min(cut.intercept, ValueFunctionApprox.min_cut_values["intercept"])
-        ValueFunctionApprox.max_cut_values["intercept"] = max(cut.intercept, ValueFunctionApprox.max_cut_values["intercept"])
+        println(cut.constraint_ref)
     end
     return window
 end
+
+function recalc_min_max_cut_values!(ValueFunctionApprox::ConvexApproximation )
+    # Recalc min max value after pareto cuts were recalculated
+
+    first_cut = ValueFunctionApprox.cuts[1]
+    for state in keys(first_cut.coefficients)
+        ValueFunctionApprox.min_cut_values["coefs"][state] = first_cut.coefficients[state]
+        ValueFunctionApprox.max_cut_values["coefs"][state] = first_cut.coefficients[state]
+    end
+    ValueFunctionApprox.min_cut_values["intercept"] = first_cut.intercept
+    ValueFunctionApprox.max_cut_values["intercept"] = first_cut.intercept
+
+    for cut in ValueFunctionApprox.cuts[2:end]
+        # Optionally mark as dominant (if not already)
+        cut.pareto_dominant = true
+    
+        for state in keys(cut.coefficients)
+            ValueFunctionApprox.min_cut_values["coefs"][state] = min(ValueFunctionApprox.min_cut_values["coefs"][state], cut.coefficients[state])
+            ValueFunctionApprox.max_cut_values["coefs"][state] = max(ValueFunctionApprox.max_cut_values["coefs"][state], cut.coefficients[state])
+        end
+    
+        ValueFunctionApprox.min_cut_values["intercept"] = min(ValueFunctionApprox.min_cut_values["intercept"], cut.intercept)
+        ValueFunctionApprox.max_cut_values["intercept"] = max(ValueFunctionApprox.max_cut_values["intercept"], cut.intercept)
+    end 
+end
+
 
 
 scale(x, max_val, min_val) = (x-min_val)/(max_val - min_val)
