@@ -176,21 +176,34 @@ function bnl!(ValueFunctionApprox::ConvexApproximation)
         return cut_array
     end
     window = [cut_array[1]]
-    for cut in cut_array
+    window[1].pareto_dominant = true
+
+    println("=====================")
+    for idx in 2:length(cut_array)
+        cut = cut_array[idx]
+
         dominated = false
-        for (i, window_cut) in enumerate(window)
+        i = 1
+        while i <= length(window)
+            window_cut = window[i]
             # check if a window cut dominates the new cut, if so discard cut
             if first_cut_dominates(window_cut, cut, ValueFunctionApprox)
                 dominated = true
+                cut.pareto_dominant = false
                 break
             # check if the new cut dominates a the window cut, if so delete window cut
             # otherwise cut can be added to window (aka. block)
-            elseif first_cut_dominates(window_cut, cut, ValueFunctionApprox)
+            elseif first_cut_dominates(cut, window_cut, ValueFunctionApprox)
+                println("dominated cut in window")
+                window_cut.pareto_dominant = false
+                # window[i].pareto_dominant = false
                 deleteat!(window, i)
+            else
+                i+=1
             end
         end
-
         if !dominated
+            cut.pareto_dominant = true
             push!(window, cut)
         end
     end
