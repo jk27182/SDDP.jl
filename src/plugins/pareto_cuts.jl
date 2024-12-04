@@ -64,7 +64,10 @@ function pareto_cut_double_pass(V::ConvexApproximation, cut::Cut)
         cut.constraint_ref = nothing
         cut.non_dominated_count = 0
     end
-    return false
+    deleteat!(V.cuts, idx_cur_used_but_dom_cuts)
+    # V.cuts = V.cuts[setdiff(1:length(V.cuts), idx_cur_used_but_dom_cuts)]
+    # return number of deleted cuts
+    return length(idx_cur_used_but_dom_cuts)
 end
 
 
