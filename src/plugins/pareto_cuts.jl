@@ -285,7 +285,7 @@ function bnl!(ValueFunctionApprox::ConvexApproximation)
     return window
 end
 
-function recalc_min_max_cut_values!(ValueFunctionApprox::ConvexApproximation )
+function recalc_min_max_cut_values!(ValueFunctionApprox::ConvexApproximation)
     # Recalc min max value after pareto cuts were recalculated
 
     first_cut = ValueFunctionApprox.cuts[1]
