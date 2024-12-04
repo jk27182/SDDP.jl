@@ -287,7 +287,16 @@ end
 
 function recalc_min_max_cut_values!(ValueFunctionApprox::ConvexApproximation)
     # Recalc min max value after pareto cuts were recalculated
+    if isempty(ValueFunctionApprox.cuts)
+        ValueFunctionApprox.min_cut_values["intercept"] = Inf
+        ValueFunctionApprox.max_cut_values["intercept"] = -Inf
+        for state in keys(ValueFunctionApprox.states)
+            ValueFunctionApprox.min_cut_values["coefs"][state] = Inf
+            ValueFunctionApprox.max_cut_values["coefs"][state] = -Inf
+        end
 
+        return
+    end
     first_cut = ValueFunctionApprox.cuts[1]
     for state in keys(first_cut.coefficients)
         ValueFunctionApprox.min_cut_values["coefs"][state] = first_cut.coefficients[state]
