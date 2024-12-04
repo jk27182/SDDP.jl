@@ -78,7 +78,7 @@ function cut_is_dominated(V::ConvexApproximation, cut::Cut)::Bool
         V.min_cut_values["intercept"],
     )
     new_cut_coef_scaled = Dict(
-        state=> scale(coef, V.max_cut_values["coefs"][state], V.max_cut_values["coefs"][state])
+        state=> scale(cut.coefficients[state], V.max_cut_values["coefs"][state], V.max_cut_values["coefs"][state])
         for state in keys(cut.coefficients)
     )
     for pareto_cut in V.cuts
