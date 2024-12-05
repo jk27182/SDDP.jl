@@ -295,6 +295,8 @@ function prune_cuts_inner_bnl!(ValueFunctionApprox::ConvexApproximation)
             break
         end
     end
+    println("START BNL")
+
     pareto_dominant_cuts = SDDP.bnl!(
         ValueFunctionApprox
     )
@@ -332,6 +334,7 @@ function prune_cuts_inner_bnl!(ValueFunctionApprox::ConvexApproximation)
 end
 
 function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
+    println("START HEURISTIC")
     cur_min_intercept = ValueFunctionApprox.min_cut_values["intercept"]
     cur_max_intercept = ValueFunctionApprox.max_cut_values["intercept"]
     cur_min_coefs = ValueFunctionApprox.min_cut_values["coefs"]
@@ -396,6 +399,6 @@ function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
     ValueFunctionApprox.min_cut_values["coefs"] = cur_min_coefs_trial
     ValueFunctionApprox.max_cut_values["coefs"] = cur_max_coefs_trial
     
-    n_deleted_cuts = length(ValueFunctionApprox.cuts) - old_approx_length
+    n_deleted_cuts =  old_approx_length - length(ValueFunctionApprox.cuts)
     return n_deleted_cuts
 end
