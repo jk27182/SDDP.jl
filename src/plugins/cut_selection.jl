@@ -336,11 +336,11 @@ function prune_cuts_inner_bnl!(ValueFunctionApprox::ConvexApproximation)
 end
 
 function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
-    println("START HEURISTIC")
-    cur_min_intercept = ValueFunctionApprox.min_cut_values["intercept"]
-    cur_max_intercept = ValueFunctionApprox.max_cut_values["intercept"]
-    cur_min_coefs = ValueFunctionApprox.min_cut_values["coefs"]
-    cur_max_coefs = ValueFunctionApprox.max_cut_values["coefs"]
+    # println("START HEURISTIC")
+    # cur_min_intercept = ValueFunctionApprox.min_cut_values["intercept"]
+    # cur_max_intercept = ValueFunctionApprox.max_cut_values["intercept"]
+    # cur_min_coefs = ValueFunctionApprox.min_cut_values["coefs"]
+    # cur_max_coefs = ValueFunctionApprox.max_cut_values["coefs"]
 
     cur_min_intercept_trial = Inf
     cur_max_intercept_trial = -Inf
@@ -350,21 +350,35 @@ function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
         cur_min_coefs_trial[state] = Inf
         cur_max_coefs_trial[state] = -Inf
     end
-    # cur_max_intercept = -Inf
-    # cur_min_intercept = Inf
+    # for cut in ValueFunctionApprox.cuts
+    #     println(cut.coefficients, " ", cut.intercept)
+    # end
+    # println("min intercept")
+    # println(ValueFunctionApprox.min_cut_values["intercept"])
+    # println("min coefs")
+    # for min_coef in values(ValueFunctionApprox.min_cut_values["coefs"])
+    #     print(min_coef, " ")
+    # end
+    # println("max intercept")
+    # println(ValueFunctionApprox.max_cut_values["intercept"])
+    # println("max coefs")
+    # for max_coef in values(ValueFunctionApprox.max_cut_values["coefs"])
+    #     print(max_coef, " ")
+    # end
     pareto_dom_cuts = []
     for cut in ValueFunctionApprox.cuts
         # sollte min und max vals nach jeder iteration angepasst werden?
         # mache es bewusst erstmal nicht
         # muss nochmal drüber nachdenken, ob sonst zu viele Punkte gelöscht werden
         # ist das überhaupt möglich?
+        # adaptive_threshold = threshold
         is_dominated = SDDP.heuristic_point_is_dominated(
             cut,
             ValueFunctionApprox,
             threshold=settings.get("threshold"),
         )
         if is_dominated
-            # println("delete cut")
+            println("delete cut")
             cut.pareto_dominant = false
             # if cut is deleted, minimum and maximum need to be updated
             subproblem = JuMP.owner_model(ValueFunctionApprox.theta)
@@ -372,19 +386,21 @@ function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
             cut.constraint_ref = nothing
             cut.non_dominated_count = 0
         else
-            push!(pareto_dom_cuts)
-            cur_max_intercept_trial = max(cut.intercept, cur_max_intercept)
-            cur_min_intercept_trial = min(cut.intercept, cur_min_intercept)
+            push!(pareto_dom_cuts, cut)
+            # cur_max_intercept_trial = max(cut.intercept, cur_max_intercept)
+            # cur_min_intercept_trial = min(cut.intercept, cur_min_intercept)
+            # for state in keys(ValueFunctionApprox.states)
+            #     cur_min_coefs_trial[state] = min(cut.coefficients[state], cur_min_coefs[state])
+            #     cur_max_coefs_trial[state] = max(cut.coefficients[state], cur_max_coefs[state])
+            # end
+            cur_min_intercept_trial = min(cut.intercept, cur_min_intercept_trial)
+            cur_max_intercept_trial = max(cut.intercept, cur_max_intercept_trial)
             for state in keys(ValueFunctionApprox.states)
-                cur_min_coefs_trial[state] = min(cut.coefficients[state], cur_min_coefs[state])
-                cur_max_coefs_trial[state] = max(cut.coefficients[state], cur_max_coefs[state])
+                cur_min_coefs_trial[state] = min(cut.coefficients[state], cur_min_coefs_trial[state])
+                cur_max_coefs_trial[state] = max(cut.coefficients[state], cur_max_coefs_trial[state])
             end
         end
     end
-    # cut_matrix = SDDP.get_cut_point_matrix(filter(cut-> cut.constraint_ref !== nothing, ValueFunctionApprox.cuts))
-    # ValueFunctionApprox.min_cut_values = minimum(cut_matrix, dim=1)
-    # ValueFunctionApprox.max_cut_values = maximum(cut_matrix, dim=1)
-    
     # if cut is not dominated, hence not removed, check if cut is new min or max for subsequent pruning steps
     old_approx_length = length(ValueFunctionApprox.cuts)
     # ValueFunctionApprox.cuts = filter(cut-> cut.pareto_dominant, ValueFunctionApprox.cuts)
@@ -395,5 +411,6 @@ function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
     ValueFunctionApprox.max_cut_values["coefs"] = cur_max_coefs_trial
     
     n_deleted_cuts =  old_approx_length - length(ValueFunctionApprox.cuts)
+    println("number of deleted cuts $(n_deleted_cuts)")
     return n_deleted_cuts
 end
