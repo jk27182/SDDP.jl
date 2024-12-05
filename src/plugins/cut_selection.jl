@@ -365,19 +365,12 @@ function prune_cuts_inner_heuristic!(ValueFunctionApprox::ConvexApproximation)
         )
         if is_dominated
             # println("delete cut")
-            # print("point is dominated")
-            # is_dominated = SDDP.heuristic_point_is_dominated(
-            #     cut,
-            #     ValueFunctionApprox,
-            #     threshold=settings.get("threshold"),
-            # )
             cut.pareto_dominant = false
             # if cut is deleted, minimum and maximum need to be updated
             subproblem = JuMP.owner_model(ValueFunctionApprox.theta)
             JuMP.delete(subproblem, cut.constraint_ref)
             cut.constraint_ref = nothing
             cut.non_dominated_count = 0
-            # ist falsch denke ich, so wird das nicht funktionieren
         else
             push!(pareto_dom_cuts)
             cur_max_intercept_trial = max(cut.intercept, cur_max_intercept)
