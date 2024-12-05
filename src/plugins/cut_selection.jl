@@ -202,6 +202,7 @@ function prune_cuts_single_cut!(model::PolicyGraph{T}) where T
     deleted_cuts_per_stage = Dict()
     for (stage, node) in model.nodes
         # skip last stage as there is no value function for next stages
+        println("stage: $(stage), n_stages: $(n_stages)")
         if stage == n_stages || stage  == "$(n_stages)"
             continue
         end
@@ -261,10 +262,11 @@ function prune_cuts_inner_bskytree!(ValueFunctionApprox::ConvexApproximation)
     @time begin
         for del_idx in deletion_idxs
             JuMP.delete(subproblem, ValueFunctionApprox.cuts[del_idx].constraint_ref)
+            ValueFunctionApprox.cuts[del_idx].constraint_ref = nothing
         end
     end
     @time deleteat!(ValueFunctionApprox.cuts, deletion_idxs)
-    return length(deletion_idxs.cuts)
+    return length(deletion_idxs)
     # for p_idx in pareto_indices
     #     ValueFunctionApprox.cuts[p_idx].pareto_dominant = true
     # end
