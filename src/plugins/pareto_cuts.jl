@@ -72,12 +72,9 @@ function pareto_cut_double_pass(V::ConvexApproximation, cut::Cut)::Tuple{Bool, I
             # If (1+epsilon)*new_cut is greater than old_cut, then coefs are not dominated
             if (1 + settings.get("epsilon")) * coef_scaled > cur_used_cut_coef_scaled
                 cut_coef_is_dominated = false
-            # end
-
-            # Check if new cut is better on this state:
+            else
             # If (1+epsilon)*new_cut is less or equal than old_cut, then coefs can not dominate old cut
             # if (1 + settings.get("epsilon")) * coef_scaled <= cur_used_cut_coef_scaled
-            else
                 new_cut_coef_dominates = false
             end
             # cut_coef_is_dominated = cut_coef_is_dominated && new_cut_coef_is_dominated
