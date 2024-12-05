@@ -46,13 +46,10 @@ function master_loop(
     while true
         result = iteration(model, options)
 
-        # println("In Iteration $iteration_counter sampled states: ", model.nodes["1"].bellman_function.global_theta.sampled_states)
-        # nodes_per_iteration[iteration_counter] = deepcopy(model.nodes)
-
-        # println(iteration_counter)
-        if settings.get("use_pruning") && (iteration_counter % settings.get("prune_interval")) == 0
+        if settings.get("use_pruning") && settings.get("pruning_type") != "pareto_double_pass" && (iteration_counter % settings.get("prune_interval")) == 0
             # println("Conduct cut pruning")
             # Assumes every stage has the same cut type as the first stage!!
+            println("iteration counter $(iteration_counter)")
             n_deleted_cuts_per_stage = prune_cuts!(model)
             deleted_cuts_per_stage_iterations["stage_$(iteration_counter)"] = n_deleted_cuts_per_stage
             # println(n_deleted_cuts_per_stage["1"])
