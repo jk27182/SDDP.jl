@@ -171,8 +171,8 @@ function _add_cut_pareto(
     cut_dominated = cut_is_dominated(V, cut)
     if !cut_dominated
         # println("cut is nicht dominiert")
-        update_min_max_coeffs!(V, cut)
         _add_cut_constraint_to_model(V, cut)
+        update_min_max_coeffs!(V, cut)
         push!(V.cuts, cut)
         push!(V.sampled_states, sampled_state)
     else
@@ -212,13 +212,36 @@ obj_y::Union{Nothing,NTuple{N,Float64}},
     return
 end
 
-function update_min_max_coeffs!(ValueFunctionApprox::ConvexApproximation, cut::Cut)
-    ValueFunctionApprox.max_cut_values["intercept"] = max(cut.intercept, ValueFunctionApprox.max_cut_values["intercept"])
-    ValueFunctionApprox.min_cut_values["intercept"] = min(cut.intercept, ValueFunctionApprox.min_cut_values["intercept"])
-    for (state_symbol, new_coef) in cut.coefficients
-        ValueFunctionApprox.max_cut_values["coefs"][state_symbol] = max(new_coef, ValueFunctionApprox.max_cut_values["coefs"][state_symbol])
-        ValueFunctionApprox.min_cut_values["coefs"][state_symbol] = min(new_coef, ValueFunctionApprox.min_cut_values["coefs"][state_symbol])
+function _add_cut_pareto_double_pass(
+    V::ConvexApproximation,
+    θᵏ::Float64, #intercept
+    πᵏ::Dict{Symbol,Float64},
+    xᵏ::Dict{Symbol,Float64}, #state
+    obj_y::Union{Nothing,NTuple{N,Float64}},
+    belief_y::Union{Nothing,Dict{T,Float64}};
+    cut_selection::Bool = settings.get("use_cut_selection"),
+) where {N,T}
+    # key ist der State und x ist dann der Wert des States x^k
+    for (key, x) in xᵏ
+        θᵏ -= πᵏ[key] * x
     end
+    _dynamic_range_warning(θᵏ, πᵏ)
+    cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
+    sampled_state = SampledState(xᵏ, obj_y, belief_y, cut, NaN)
+    add_new_cut, n_deleted_cuts = pareto_cut_double_pass(V, cut)
+    if add_new_cut
+        # println("new cut dominates $(n_deleted_cuts) cuts")
+        # println("cut is nicht dominiert")
+        _add_cut_constraint_to_model(V, cut)
+        push!(V.cuts, cut)
+        push!(V.sampled_states, sampled_state)
+        recalc_min_max_cut_values!(V)
+        # update_min_max_coeffs!(V, cut)
+    else
+        # println("nach pareto cut heuristic wurde der Cut NICHT eingeführt")
+        SDDP.denied_cut_counter +=1
+    end
+    return
 end
 
 function _add_cut(
@@ -231,17 +254,21 @@ function _add_cut(
     cut_selection::Bool = settings.get("use_cut_selection"),
 ) where {N,T}
     if settings.get("use_pareto_cut_logic")
-        Logging.@debug "Using pareto cutting scheme"
-        _add_cut_pareto(
-            V,
-            θᵏ,
-            πᵏ,
-            xᵏ,
-            obj_y,
-            belief_y;
-            cut_selection,
-        )
-    else
+        if settings.get("use_pruning") && settings.get("prune_interval") == 1
+            # println("use pareto double pass")
+            _add_cut_pareto_double_pass(V, θᵏ, πᵏ, xᵏ, obj_y, belief_y; cut_selection)
+        else
+            _add_cut_pareto(
+                V,
+                θᵏ,
+                πᵏ,
+                xᵏ,
+                obj_y,
+                belief_y;
+                cut_selection,
+            )
+        end
+    elseif cut_selection
         Logging.@debug "Using regular cutting scheme"
         _add_cut_normal(
             V,
@@ -251,6 +278,15 @@ function _add_cut(
             obj_y,
             belief_y;
             cut_selection,
+        )
+
+    else
+        throw("""Invalid combination of cut selection settings.
+            Level One cut selection active: $(cut_selection) 
+            Pareto cut selection active: $(settings.get("use_pareto_cut_logic")) 
+            Use pruning with interval of 1: $(settings.get("use_pruning")) intervalL $(settings.get("prune_interval")) 
+            Current epsilon: $(settings.get("epsilon"))
+        """
         )
 
     end
