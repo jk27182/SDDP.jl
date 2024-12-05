@@ -170,6 +170,7 @@ function _add_cut_pareto(
     sampled_state = SampledState(xᵏ, obj_y, belief_y, cut, NaN)
     cut_dominated = cut_is_dominated(V, cut)
     if !cut_dominated
+        cut.pareto_dominant = true
         # println("cut is nicht dominiert")
         _add_cut_constraint_to_model(V, cut)
         update_min_max_coeffs!(V, cut)

@@ -139,15 +139,14 @@ function cut_is_dominated(V::ConvexApproximation, cut::Cut)::Bool
                 V.min_cut_values["coefs"][state]
             )
             # check if even when scaled with epsilon, is new cut coef dominated
-            new_cut_coef_dominated = ((1+settings.get("epsilon"))*coef_scaled < cur_used_cut_coef_scaled)
+            new_cut_coef_dominated = ((1+settings.get("epsilon"))*coef_scaled <= cur_used_cut_coef_scaled)
             cut_coef_dominated = cut_coef_dominated && new_cut_coef_dominated
         end
-        cut_is_dominated = ((1 + settings.get("epsilon"))*new_cut_intercept_scaled < scaled_intercept) && cut_coef_dominated 
+        cut_is_dominated = ((1 + settings.get("epsilon"))*new_cut_intercept_scaled <= scaled_intercept) && cut_coef_dominated 
         if cut_is_dominated
             return true
         end
     end
-    cut.pareto_dominant = true
     return false
 end
 
